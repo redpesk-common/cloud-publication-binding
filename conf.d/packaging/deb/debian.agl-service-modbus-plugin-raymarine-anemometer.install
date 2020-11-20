@@ -1,0 +1,2 @@
+opt/AGL/agl-service-modbus/etc/control-modbus_raymarine-anemometer-config.json
+opt/AGL/agl-service-modbus/lib/plugins/raymarine-anemometer.ctl.so

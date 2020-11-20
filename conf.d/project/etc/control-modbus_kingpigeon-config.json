@@ -1,0 +1,99 @@
+{
+    "$schema": "http://iot.bzh/download/public/schema/json/ctl-schema.json",
+    "metadata": {
+      "uid": "modbus-svc",
+      "version": "1.0",
+      "api": "modbus",
+      "info": "Generic KingPigeon default 192.168.1.110:502 slaveid=1 Test Config"
+    },
+    "plugins": [
+      {
+        "uid": "king-pigeon",
+        "info": "Plugin to handle user custom registry encoding/decoding",
+        "spath": "package/lib/:./lib/plugins:./var",
+        "libs": [
+          "kingpigeon.ctl.so"
+        ]
+      }
+    ], 
+    "modbus": [
+      {
+        "uid": "King-Pigeon-RTU0",
+        "info": "King Pigeon 'RTU0' Modbus TCP Remote I/O Module",
+        "uri" : "tcp://192.168.1.110:502",
+        "slaveid": 1,
+        "timeout": 250,
+        "autostart" : 1,
+        "prefix": "RTU0",
+        "privilege": "global privilege",
+        "hertz": 10,
+        "sensors": [
+          {
+            "uid": "PRODUCT_INFO",
+            "info" : "Array with Product Number, Lot, Serial, OnlineTime, Hardware, Firmware",
+            "type": "Register_input",
+            "format" : "plugin://king-pigeon#devinfo",
+            "register" : 26,
+            "privilege": "special privilege"
+          },
+          {
+            "uid": "D01_SWITCH",
+            "type": "Coil_Holding",
+            "format" : "BOOL",
+            "register" : 0,
+            "privilege": "special privilege"
+          },
+          {
+            "uid": "DIN01_STATUS",
+            "type": "Coil_Input",
+            "format" : "BOOL",
+            "register" : 0
+          },
+          {
+            "uid": "DIN01_COUNTER",
+            "type": "Register_Holding",
+            "format" : "INT32",
+            "iddle" : 25,
+            "register" : 3
+          },
+          {
+            "uid": "D01_FREQUENCY",
+            "type": "Register_Holding",
+            "format" : "INT32",
+            "register" : 7
+          },
+          {
+            "uid": "D01_DUTY",
+            "type": "Register_Holding",
+            "format" : "INT16",
+            "register" : 9
+          },
+          {
+            "uid": "A01",
+            "type": "Register_Holding",
+            "format" : "INT16",
+            "register" : 1
+          },
+          {
+            "uid": "DIN01",
+            "type": "Coil_Input",
+            "format" : "BOOL",
+            "register" : 1
+          },
+          {
+            "uid": "AINT_01",
+            "type":  "Register_input",
+            "format" : "INT16",
+            "register" : 1
+          },
+          {
+            "uid": "MAPPING",
+            "type": "Register_Holding",
+            "format" : "INT16",
+            "register" : 100,
+            "count": 200
+          }
+       ]
+      }
+    ]
+}

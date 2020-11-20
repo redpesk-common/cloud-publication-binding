@@ -1,0 +1,20 @@
+[Unit]
+Description=Agl modbus service
+
+[Service]
+Type=simple
+ExecStartPre=mkdir -p /run/user/%U/apis/ws
+ExecStart=/opt/AGL/bin/afb-daemon \
+	--name=afb-modbus \
+	--port=12345 \
+	--workdir=/usr/share/agl-service-modbus \
+	--ldpaths=. \
+    --roothttp=. \
+    --token= \
+    --verbose \
+    --verbose \
+    --verbose \
+	--ws-server=unix:/run/user/%U/apis/ws/modbus
+
+[Install]
+WantedBy=multi-user.target

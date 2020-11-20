@@ -1,0 +1,5 @@
+agl-service-modbus (2.0-0) unstable; urgency=low
+
+  * init build
+
+ -- Ronan Le Martret <ronan.lemartret@iot.bzh>  Thu, 25 Oct 2019 10:50:38 +0100
