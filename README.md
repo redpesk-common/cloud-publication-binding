@@ -1,4 +1,3 @@
-# cloud-publication-binding
+# rp-service-cloud
 
-Binding allowing to publish target data to the cloud.
-
+WIP version of the Redpesk cloud binding (Redis replication, etc) until a final location is set
