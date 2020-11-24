@@ -6,16 +6,6 @@
       "api": "modbus",
       "info": "Generic KingPigeon default 192.168.1.110:502 slaveid=1 Test Config"
     },
-    "plugins": [
-      {
-        "uid": "king-pigeon",
-        "info": "Plugin to handle user custom registry encoding/decoding",
-        "spath": "package/lib/:./lib/plugins:./var",
-        "libs": [
-          "kingpigeon.ctl.so"
-        ]
-      }
-    ], 
     "modbus": [
       {
         "uid": "King-Pigeon-RTU0",

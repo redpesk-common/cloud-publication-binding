@@ -1,6 +1,5 @@
 opt/AGL/agl-service-modbus
 opt/AGL/agl-service-modbus/lib
-opt/AGL/agl-service-modbus/lib/plugins
 opt/AGL/agl-service-modbus/lib/afb-modbus.so
 opt/AGL/agl-service-modbus/bin
 opt/AGL/agl-service-modbus/etc

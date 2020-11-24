@@ -49,6 +49,3 @@ INSTALL(FILES
 		DESTINATION
         ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 	)
-
-
-add_subdirectory("plugins")

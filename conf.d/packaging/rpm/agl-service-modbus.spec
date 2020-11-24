@@ -38,22 +38,6 @@ Summary:        AGL modbus Binding devel
 %description devel
 AGL modbus Binding devel package.
 
-%package -n modbus-plugin-kingpigeon
-Summary: AGL plugin-kingpigeon
-Group:          Development/Libraries/C and C++
-Requires:       %{name} = %{version}
-Conflicts:		plugin-raymarine-anemo
-%description -n modbus-plugin-kingpigeon
-plugin-kingpigeon subpackage.
-
-%package -n modbus-plugin-raymarine-anemo
-Summary: AGL  plugin-raymarine-anemo
-Group:          Development/Libraries/C and C++
-Requires:       %{name} = %{version}
-Conflicts:		plugin-kingpigeon
-%description -n modbus-plugin-raymarine-anemo
-plugin-raymarine-anemo subpackage.
-
 %prep
 %autosetup -p 1
 
@@ -86,14 +70,12 @@ install -m 0644 %{SOURCE2} %{?buildroot}%{_userunitdir}
 install -d %{?buildroot}%{_libdir}
 #example file configuration
 install -d %{?buildroot}/%{_sysconfdir}/%{name}
-install -m 0644 %{?buildroot}/%{_prefix}/%{name}/etc/control-modbus_kingpigeon-config.json %{?buildroot}/%{_prefix}/%{name}/etc/control-modbus.json.sample
 
 %files
 %defattr(-,root,root)
 %dir %{_prefix}/%{name}
 %dir %{_prefix}/%{name}/etc
 %dir %{_prefix}/%{name}/lib
-%dir %{_prefix}/%{name}/lib/plugins
 
 %dir %{_prefix}/%{name}/htdocs
 %{_prefix}/%{name}/htdocs/*
@@ -106,14 +88,6 @@ install -m 0644 %{?buildroot}/%{_prefix}/%{name}/etc/control-modbus_kingpigeon-c
 %files devel
 %{_libdir}/pkgconfig/*.pc
 %{_includedir}/*.h
-
-%files -n modbus-plugin-kingpigeon
-%{_prefix}/%{name}/etc/control-modbus_kingpigeon-config.json
-%{_prefix}/%{name}/lib/plugins/kingpigeon.ctl.so
-
-%files -n modbus-plugin-raymarine-anemo
-%{_prefix}/%{name}/etc/control-modbus_raymarine-anemometer-config.json
-%{_prefix}/%{name}/lib/plugins/raymarine-anemometer.ctl.so
 
 %changelog
 * Mon Jan 13 2020 Ronan <ronan.lemartret@iot.bzh> - 1.0
