@@ -103,7 +103,7 @@ OnErrorExit:
 // Static verb not depending on Modbus json config file
 static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
-    { .verb = "ping",     .callback = PingTest    , .info = "Modbus API ping test"},
+    { .verb = "ping",     .callback = PingTest    , .info = "Cloud API ping test"},
     { .verb = "info",     .callback = InfoRtu     , .info = "Modbus List RTUs"},
     { .verb = NULL} /* marker for end of the array */
 };
@@ -112,6 +112,7 @@ static int CtrlLoadStaticVerbs (afb_api_t api, afb_verb_t *verbs, void *vcbdata)
     int errcount=0;
 
     for (int idx=0; verbs[idx].verb; idx++) {
+        AFB_API_NOTICE(api, "Registering static verb '%s' info='%s'", CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info);
         errcount+= afb_api_add_verb(api, CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info, CtrlApiVerbs[idx].callback, vcbdata, 0, 0,0);
     }
 
@@ -304,6 +305,8 @@ static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ)
     ModbusRtuT *rtus;
     int err;
 
+    return 0;
+
     // everything is done during initial config call
     if (!rtusJ) return 0;
 
@@ -324,13 +327,12 @@ static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ)
         if (err) goto OnErrorExit;
     }
 
-
     // add static controls verbs
-    err = CtrlLoadStaticVerbs (api, CtrlApiVerbs, (void*) rtus);
+/*     err = CtrlLoadStaticVerbs (api, CtrlApiVerbs, (void*) rtus);
     if (err) {
         AFB_API_ERROR(api, "CtrlLoadOneApi fail to Registry static API verbs");
         goto OnErrorExit;
-    }
+    } */
     
     return 0;
 
@@ -373,6 +375,7 @@ static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
 
 int afbBindingEntry(afb_api_t api) {
     int status = 0;
+    int err = 0;
     char *searchPath, *envConfig;
     afb_api_t handle;
 
@@ -407,7 +410,20 @@ int afbBindingEntry(afb_api_t api) {
 
     // create one API per config file (Pre-V3 return code ToBeChanged)
     handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 1, CtrlLoadOneApi, ctrlConfig);
-    status = (handle) ? 0 : -1;
+    if (!handle){
+        AFB_API_ERROR(api, "afbBindingEntry failed to create API");
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+        
+    }
+
+    // add static controls verbs
+    err = CtrlLoadStaticVerbs (handle, CtrlApiVerbs, (void*) NULL);
+    if (err) {
+        AFB_API_ERROR(api, "afbBindingEntry fail to register static API verbs");
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+    }
 
 _exit_afbBindingEntry:
     free(searchPath);

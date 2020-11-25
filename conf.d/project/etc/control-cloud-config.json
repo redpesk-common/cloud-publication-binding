@@ -6,6 +6,11 @@
       "api": "rp-cloud",
       "info": "Redpesk cloud replication service"
     },
+    "redis-cloud": [{
+      "port": "7777",
+      "host": "cloud-service"
+    }
+    ],
     "modbus": [
       {
         "uid": "King-Pigeon-RTU0",
