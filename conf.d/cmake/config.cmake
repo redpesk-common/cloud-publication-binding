@@ -20,7 +20,7 @@ set(CMAKE_INSTALL_SO_NO_EXE 0)
 
 # Project Info
 # ------------------
-set(PROJECT_NAME agl-service-modbus)
+set(PROJECT_NAME rp-service-cloud)
 set(PROJECT_VERSION "1.0")
 set(PROJECT_PRETTY_NAME "Helloworld for AGL")
 set(PROJECT_DESCRIPTION "Provide an AGL Helloworld Binding")
@@ -141,7 +141,7 @@ set(WIDGET_TYPE application/vnd.agl.service)
 # This is the file that will be executed, loaded,
 # at launch time by the application framework.
 #
-set(WIDGET_ENTRY_POINT lib/afb-modbus.so)
+set(WIDGET_ENTRY_POINT lib/rp-cloud.so)
 
 # Optional dependencies order
 # ---------------------------
@@ -156,7 +156,7 @@ set(WIDGET_ENTRY_POINT lib/afb-modbus.so)
 #set(EXTRA_LINK_LIBRARIES)
 
 # Optional force binding installation
-# ------------------------------------libmodbus.so
+# ------------------------------------
 # set(BINDINGS_INSTALL_PREFIX PrefixPath )
 
 # Optional force binding Linking flag

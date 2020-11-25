@@ -1,10 +1,10 @@
 {
     "$schema": "http://iot.bzh/download/public/schema/json/ctl-schema.json",
     "metadata": {
-      "uid": "modbus-svc",
+      "uid": "rp-cloud-svc",
       "version": "1.0",
-      "api": "modbus",
-      "info": "Generic KingPigeon default 192.168.1.110:502 slaveid=1 Test Config"
+      "api": "rp-cloud",
+      "info": "Redpesk cloud replication service"
     },
     "modbus": [
       {
