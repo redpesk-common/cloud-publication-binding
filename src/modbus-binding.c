@@ -80,7 +80,8 @@ static void InfoRtu (afb_req_t request) {
                 wrap_json_pack (&elemJ, "{ss ss ss}", "uid", rtus[idx].uid, "uri",rtus[idx].uri, "info", rtus[idx].info);
                 break;
             case 2:
-                err= ModbusRtuIsConnected (request->api, &rtus[idx]);
+                //err= ModbusRtuIsConnected (request->api, &rtus[idx]);
+                err = -1;
                 if (err <0) {
                     wrap_json_pack (&elemJ, "{ss ss ss}", "uid", rtus[idx].uid, "uri",rtus[idx].uri, "info", rtus[idx].info);;
                 } else {
