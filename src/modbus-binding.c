@@ -373,6 +373,8 @@ int afbBindingEntry(afb_api_t api) {
     int err = 0;
     char *searchPath, *envConfig;
     afb_api_t handle;
+    char *returnedError = NULL, *returnedInfo = NULL;
+    json_object *requestJ, *responseJ = NULL;
 
     AFB_API_NOTICE(api, "Controller in afbBindingEntry");
 
@@ -415,6 +417,17 @@ int afbBindingEntry(afb_api_t api) {
     err = CtrlLoadStaticVerbs (handle, CtrlApiVerbs, (void*) NULL);
     if (err) {
         AFB_API_ERROR(api, "afbBindingEntry fail to register static API verbs");
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+    }
+
+    err = afb_api_call_sync(handle, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
+    if (err) {
+        AFB_API_ERROR(handle,
+			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
+                  "ping", "redis-from-cloud",
+                  returnedError ? returnedError : "not returned",
+			      returnedInfo ? returnedInfo : "not returned");
         status = ERROR;
         goto _exit_afbBindingEntry;
     }
