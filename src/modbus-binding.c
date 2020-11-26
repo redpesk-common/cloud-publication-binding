@@ -361,6 +361,7 @@ static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
     CtlConfigT* ctrlConfig = (CtlConfigT*)vcbdata;
 
     // save closure as api's data context
+    // note: this is mandatory for the controller to work
     afb_api_set_userdata(api, ctrlConfig);
 
     // load section for corresponding API
@@ -368,7 +369,8 @@ static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
 
     // init and seal API function
     afb_api_on_init(api, CtrlInitOneApi);
-    afb_api_seal(api);
+    // XXX: do not seal for now as we moved static verbs defs in main entry
+    //afb_api_seal(api);
 
     return error;    
 }
@@ -414,7 +416,6 @@ int afbBindingEntry(afb_api_t api) {
         AFB_API_ERROR(api, "afbBindingEntry failed to create API");
         status = ERROR;
         goto _exit_afbBindingEntry;
-        
     }
 
     // add static controls verbs

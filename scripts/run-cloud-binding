@@ -2,6 +2,11 @@
 
 WD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/build"
 
-afb-daemon --name rp-cloud --port=5678 --workdir=$WD \
+if [[ "$1" == "debug" ]]; then
+    GDB="gdb --args"
+fi
+
+cd $WD
+$GDB afb-daemon --name rp-cloud --port=5678 --workdir=$WD \
 --ldpath=/dev/null --binding=package/lib/rp-cloud.so \
---roothttp=package/htdocs --token= --tracereq=common -vvv \
+--roothttp=package/htdocs --token= --tracereq=common -vvv 
