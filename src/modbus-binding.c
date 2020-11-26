@@ -37,7 +37,6 @@ static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ)
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
 static CtlSectionT ctrlSections[] = {
-    { .key = "plugins", .loadCB = PluginConfig, .handle= mbEncoderRegister},
     { .key = "onload", .loadCB = OnloadConfig },
     { .key = "modbus", .loadCB = ModbusConfig },
     { .key = NULL }
@@ -327,13 +326,6 @@ static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ)
         if (err) goto OnErrorExit;
     }
 
-    // add static controls verbs
-/*     err = CtrlLoadStaticVerbs (api, CtrlApiVerbs, (void*) rtus);
-    if (err) {
-        AFB_API_ERROR(api, "CtrlLoadOneApi fail to Registry static API verbs");
-        goto OnErrorExit;
-    } */
-    
     return 0;
 
 OnErrorExit:
@@ -384,7 +376,7 @@ int afbBindingEntry(afb_api_t api) {
     AFB_API_NOTICE(api, "Controller in afbBindingEntry");
 
     // register Code Encoders before plugin get loaded
-    mbRegisterCoreEncoders();
+    //mbRegisterCoreEncoders();
 
     envConfig= getenv("CONTROL_CONFIG_PATH");
     if (!envConfig) envConfig = CONTROL_CONFIG_PATH;
