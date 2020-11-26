@@ -4,7 +4,8 @@
       "uid": "rp-cloud-svc",
       "version": "1.0",
       "api": "rp-cloud",
-      "info": "Redpesk cloud replication service"
+      "info": "Redpesk cloud replication service",
+      "require":"redis-from-cloud"
     },
     "redis-cloud": [{
       "port": "7777",

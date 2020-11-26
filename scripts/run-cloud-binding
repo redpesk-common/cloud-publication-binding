@@ -4,9 +4,12 @@ WD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/build"
 
 if [[ "$1" == "debug" ]]; then
     GDB="gdb --args"
+    #export AFB_DEBUG_BREAK=main-entry
 fi
 
 cd $WD
 $GDB afb-daemon --name rp-cloud --port=5678 --workdir=$WD \
 --ldpath=/dev/null --binding=package/lib/rp-cloud.so \
---roothttp=package/htdocs --token= --tracereq=common -vvv 
+--roothttp=package/htdocs --token= --tracereq=common -vvv \
+--ws-client=tcp:localhost:1212/redis-from-cloud \
+--monitoring
