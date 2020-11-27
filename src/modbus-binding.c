@@ -47,9 +47,24 @@ static CtlSectionT ctrlSections[] = {
 static void startRepl (afb_req_t request) {
     char response[32];
     json_object *queryJ =  afb_req_json(request);
+    int err, status;
+    char *returnedError = NULL, *returnedInfo = NULL;
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
+    json_object *requestJ, *responseJ = NULL;
 
+    err = afb_api_call_sync(request->api, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
+    if (err) {
+        AFB_API_ERROR(request->api,
+			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
+                  "ping", "redis-from-cloud",
+                  returnedError ? returnedError : "not returned",
+			      returnedInfo ? returnedInfo : "not returned");
+        status = ERROR;
+        snprintf (response, sizeof(response), "Replication failed");
+        afb_req_fail_f(request,json_object_new_string(response), NULL);
+        return;
+    }
     snprintf (response, sizeof(response), "Replication started");
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
@@ -318,9 +333,6 @@ OnErrorExit:
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
 
     static int callCnt = 0;
-    int err;
-    char *returnedError = NULL, *returnedInfo = NULL;
-    json_object *requestJ, *responseJ = NULL;
 
     if (callCnt == 0) {
         AFB_API_NOTICE (api, "%s: init time", __func__);
@@ -330,16 +342,6 @@ static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) 
     callCnt++;
     return 0;
 
-/*     err = afb_api_call_sync(handle, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
-    if (err) {
-        AFB_API_ERROR(handle,
-			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
-                  "ping", "redis-from-cloud",
-                  returnedError ? returnedError : "not returned",
-			      returnedInfo ? returnedInfo : "not returned");
-        status = ERROR;
-        goto _exit_afbBindingEntry;
-    } */
 }
 
 static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
