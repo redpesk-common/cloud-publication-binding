@@ -44,14 +44,24 @@ static CtlSectionT ctrlSections[] = {
     { .key = NULL }
 };
 
+static void stopRepl (afb_req_t request) {
+    char * msg = "Stopping replication";
+
+    AFB_API_NOTICE(request->api, "%s called", __func__);
+    json_object *requestJ, *responseJ = NULL;
+
+    afb_req_success_f(request,json_object_new_string(msg), NULL);
+    return;
+}
+
 static void startRepl (afb_req_t request) {
     char response[32];
     json_object *queryJ =  afb_req_json(request);
     int err, status;
     char *returnedError = NULL, *returnedInfo = NULL;
+    json_object *requestJ, *responseJ = NULL;
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
-    json_object *requestJ, *responseJ = NULL;
 
     err = afb_api_call_sync(request->api, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
     if (err) {
@@ -70,6 +80,7 @@ static void startRepl (afb_req_t request) {
 
     return;
 }
+
 static void PingTest (afb_req_t request) {
     static int count=0;
     char response[32];
@@ -134,6 +145,7 @@ static afb_verb_t CtrlApiVerbs[] = {
     { .verb = "ping",     .callback = PingTest    , .info = "Cloud API ping test"},
     { .verb = "info",     .callback = InfoRtu     , .info = "Modbus List RTUs"},
     { .verb = "start",     .callback = startRepl     , .info = "Start replication"},
+    { .verb = "stop",     .callback = stopRepl     , .info = "Stop replication"},
     { .verb = NULL} /* marker for end of the array */
 };
 
