@@ -33,12 +33,14 @@
 #endif
 
 static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
+static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
 static CtlSectionT ctrlSections[] = {
     { .key = "onload", .loadCB = OnloadConfig },
     { .key = "modbus", .loadCB = ModbusConfig },
+    { .key = "redis-cloud", .loadCB = cloudConfig },
     { .key = NULL }
 };
 
@@ -301,6 +303,33 @@ OnErrorExit:
     return -1;    
 }
 
+static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
+
+    static int callCnt = 0;
+    int err;
+    char *returnedError = NULL, *returnedInfo = NULL;
+    json_object *requestJ, *responseJ = NULL;
+
+    if (callCnt == 0) {
+        AFB_API_NOTICE (api, "%s: init time", __func__);
+    } else if (callCnt == 1) {
+        AFB_API_NOTICE (api, "%s: exec time", __func__);
+    }
+    callCnt++;
+    return 0;
+
+/*     err = afb_api_call_sync(handle, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
+    if (err) {
+        AFB_API_ERROR(handle,
+			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
+                  "ping", "redis-from-cloud",
+                  returnedError ? returnedError : "not returned",
+			      returnedInfo ? returnedInfo : "not returned");
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+    } */
+}
+
 static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
     ModbusRtuT *rtus;
     int err;
@@ -373,8 +402,6 @@ int afbBindingEntry(afb_api_t api) {
     int err = 0;
     char *searchPath, *envConfig;
     afb_api_t handle;
-    char *returnedError = NULL, *returnedInfo = NULL;
-    json_object *requestJ, *responseJ = NULL;
 
     AFB_API_NOTICE(api, "Controller in afbBindingEntry");
 
@@ -421,16 +448,6 @@ int afbBindingEntry(afb_api_t api) {
         goto _exit_afbBindingEntry;
     }
 
-    err = afb_api_call_sync(handle, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
-    if (err) {
-        AFB_API_ERROR(handle,
-			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
-                  "ping", "redis-from-cloud",
-                  returnedError ? returnedError : "not returned",
-			      returnedInfo ? returnedInfo : "not returned");
-        status = ERROR;
-        goto _exit_afbBindingEntry;
-    }
 
 _exit_afbBindingEntry:
     free(searchPath);
