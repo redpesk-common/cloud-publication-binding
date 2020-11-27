@@ -44,6 +44,17 @@ static CtlSectionT ctrlSections[] = {
     { .key = NULL }
 };
 
+static void startRepl (afb_req_t request) {
+    char response[32];
+    json_object *queryJ =  afb_req_json(request);
+
+    AFB_API_NOTICE(request->api, "%s called", __func__);
+
+    snprintf (response, sizeof(response), "Replication started");
+    afb_req_success_f(request,json_object_new_string(response), NULL);
+
+    return;
+}
 static void PingTest (afb_req_t request) {
     static int count=0;
     char response[32];
@@ -107,6 +118,7 @@ static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
     { .verb = "ping",     .callback = PingTest    , .info = "Cloud API ping test"},
     { .verb = "info",     .callback = InfoRtu     , .info = "Modbus List RTUs"},
+    { .verb = "start",     .callback = startRepl     , .info = "Start replication"},
     { .verb = NULL} /* marker for end of the array */
 };
 
