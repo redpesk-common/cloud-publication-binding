@@ -61,9 +61,12 @@ static void startRepl (afb_req_t request) {
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *requestJ, *responseJ = NULL;
 
+#define REDIS_CLOUD_API "redis-cloud"
+#define REDIS_CLOUD_VERB "ping"
+
     AFB_API_NOTICE(request->api, "%s called", __func__);
 
-    err = afb_api_call_sync(request->api, "redis-from-cloud", "ping", NULL, &responseJ, &returnedError, &returnedInfo);
+    err = afb_api_call_sync(request->api, REDIS_CLOUD_API, REDIS_CLOUD_VERB, NULL, &responseJ, &returnedError, &returnedInfo);
     if (err) {
         AFB_API_ERROR(request->api,
 			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
