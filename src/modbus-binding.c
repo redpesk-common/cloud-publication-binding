@@ -77,7 +77,7 @@ static void startReplication (afb_req_t request) {
         afb_req_fail_f(request,json_object_new_string(response), NULL);
         return;
     }
-    snprintf (response, sizeof(response), "Replication started. Remote side replied: %s", json_object_new_string(responseJ));
+    snprintf (response, sizeof(response), "Replication started. Remote side replied: %s", json_object_to_json_string(responseJ));
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
     return;
