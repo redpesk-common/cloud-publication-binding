@@ -45,7 +45,6 @@ static void stopReplicationCb (afb_req_t request) {
     char * msg = "Stopping replication";
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
-    json_object *requestJ, *responseJ = NULL;
 
     afb_req_success_f(request,json_object_new_string(msg), NULL);
     return;
@@ -53,10 +52,9 @@ static void stopReplicationCb (afb_req_t request) {
 
 static void startReplicationCb (afb_req_t request) {
     char response[233];
-    json_object *queryJ =  afb_req_json(request);
-    int err, status;
+    int err;
     char *returnedError = NULL, *returnedInfo = NULL;
-    json_object *requestJ, *responseJ = NULL;
+    json_object *responseJ = NULL;
 
 #define REDIS_CLOUD_API "redis-from-cloud"
 #define REDIS_CLOUD_VERB "ping"
@@ -69,9 +67,7 @@ static void startReplicationCb (afb_req_t request) {
                   REDIS_CLOUD_VERB, REDIS_CLOUD_API,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
-        status = ERROR;
-        snprintf (response, sizeof(response), "Replication failed");
-        afb_req_fail_f(request,json_object_new_string(response), NULL);
+        afb_req_fail_f(request,API_REPLY_FAILURE, "Replication failed");
         return;
     }
     snprintf (response, sizeof(response), "Replication started. Remote side replied: %s", json_object_to_json_string(responseJ));
@@ -93,8 +89,6 @@ static void PingCb (afb_req_t request) {
 }
 
 static void InfoCb (afb_req_t request) {
-    json_object *queryJ =  afb_req_json(request);
-
     AFB_API_NOTICE(request->api, "%s called. Not implemented !", __func__);
     afb_req_fail(request, API_REPLY_FAILURE, "Not implemented! Need to check Gwen's Markdown");
 }
