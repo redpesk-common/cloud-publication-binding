@@ -90,7 +90,7 @@ static void PingTest (afb_req_t request) {
     json_object *queryJ =  afb_req_json(request);
 
     snprintf (response, sizeof(response), "Pong=%d", count++);
-    AFB_API_NOTICE (request->api, "Modbus:ping count=%d query=%s", count, json_object_get_string(queryJ));
+    AFB_API_NOTICE (request->api, "%s:ping count=%d query=%s", afb_api_name(request->api), count, json_object_get_string(queryJ));
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
     return;
