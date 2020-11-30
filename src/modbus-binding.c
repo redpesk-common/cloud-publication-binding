@@ -32,19 +32,20 @@
 #define MB_DEFAULT_POLLING_FEQ 10
 #endif
 
-static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
+#define API_REPLY_SUCCESS "success"
+#define API_REPLY_FAILURE "failed"
+
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
 static CtlSectionT ctrlSections[] = {
     { .key = "onload", .loadCB = OnloadConfig },
-    { .key = "modbus", .loadCB = ModbusConfig },
     { .key = "redis-cloud", .loadCB = cloudConfig },
     { .key = NULL }
 };
 
-static void stopReplication (afb_req_t request) {
+static void stopReplicationCb (afb_req_t request) {
     char * msg = "Stopping replication";
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
@@ -54,7 +55,7 @@ static void stopReplication (afb_req_t request) {
     return;
 }
 
-static void startReplication (afb_req_t request) {
+static void startReplicationCb (afb_req_t request) {
     char response[233];
     json_object *queryJ =  afb_req_json(request);
     int err, status;
@@ -83,71 +84,32 @@ static void startReplication (afb_req_t request) {
     return;
 }
 
-static void PingTest (afb_req_t request) {
+static void PingCb (afb_req_t request) {
     static int count=0;
     char response[32];
     json_object *queryJ =  afb_req_json(request);
 
     snprintf (response, sizeof(response), "Pong=%d", count++);
     AFB_API_NOTICE (request->api, "%s:ping count=%d query=%s", afb_api_name(request->api), count, json_object_get_string(queryJ));
-    afb_req_success_f(request,json_object_new_string(response), NULL);
+    afb_req_success_f(request, json_object_new_string(response), NULL);
 
     return;
 }
 
-static void InfoRtu (afb_req_t request) {
-    json_object *elemJ;
-    int err, idx;
-    int verbose=0;
-    int length =0;
-    ModbusRtuT *rtus = (ModbusRtuT*) afb_req_get_vcbdata(request);
+static void InfoCb (afb_req_t request) {
     json_object *queryJ =  afb_req_json(request);
-    json_object *responseJ= json_object_new_array();
 
-    err= wrap_json_unpack(queryJ, "{s?i s?i !}", "verbose", &verbose, "length", &length);
-    if (err) {
-        afb_req_fail_f (request, "ModbusRtuAdmin", "ListRtu: invalid 'json' query=%s", json_object_get_string(queryJ));
-        goto OnErrorExit;
-    }
-
-    // loop on every defined RTU
-    for (idx=0; rtus[idx].uid; idx++) {
-        switch (verbose) {
-            case 0:
-                wrap_json_pack (&elemJ, "{ss ss}", "uid", rtus[idx].uid);
-                break;
-            case 1:
-            default:
-                wrap_json_pack (&elemJ, "{ss ss ss}", "uid", rtus[idx].uid, "uri",rtus[idx].uri, "info", rtus[idx].info);
-                break;
-            case 2:
-                //err= ModbusRtuIsConnected (request->api, &rtus[idx]);
-                err = -1;
-                if (err <0) {
-                    wrap_json_pack (&elemJ, "{ss ss ss}", "uid", rtus[idx].uid, "uri",rtus[idx].uri, "info", rtus[idx].info);;
-                } else {
-                    wrap_json_pack (&elemJ, "{ss ss ss sb}", "uid", rtus[idx].uid, "uri",rtus[idx].uri, "info", rtus[idx].info, "connected", err);;
-                }
-                break;
-        }
-
-        json_object_array_add(responseJ, elemJ);
-    }
-   
-    afb_req_success(request, responseJ, NULL);
-    return;
-
-OnErrorExit:
-    return;
+    AFB_API_NOTICE(request->api, "%s called. Not implemented !", __func__);
+    afb_req_fail(request, API_REPLY_FAILURE, "Not implemented! Need to check Gwen's Markdown");
 }
 
 // Static verb not depending on Modbus json config file
 static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
-    { .verb = "ping",     .callback = PingTest    , .info = "Cloud API ping test"},
-    { .verb = "info",     .callback = InfoRtu     , .info = "Cloud API info"},
-    { .verb = "start",     .callback = startReplication     , .info = "Start replication"},
-    { .verb = "stop",     .callback = stopReplication     , .info = "Stop replication"},
+    { .verb = "ping",     .callback = PingCb    , .info = "Cloud API ping test"},
+    { .verb = "info",     .callback = InfoCb, .info = "Cloud API info"},
+    { .verb = "start",     .callback = startReplicationCb     , .info = "Start DB replication"},
+    { .verb = "stop",     .callback = stopReplicationCb     , .info = "Stop DB replication"},
     { .verb = NULL} /* marker for end of the array */
 };
 
@@ -161,188 +123,6 @@ static int CtrlLoadStaticVerbs (afb_api_t api, afb_verb_t *verbs, void *vcbdata)
 
     return errcount;
 };
-static void RtuDynRequest(afb_req_t request) {
-
-    // retrieve action handle from request and execute the request
-    json_object *queryJ = afb_req_json(request);
-    ModbusRtuT* rtu= (ModbusRtuT*) afb_req_get_vcbdata(request);
-    ModbusRtuRequest (request, rtu, queryJ);
-}
-
-static void SensorDynRequest(afb_req_t request) {
-
-    // retrieve action handle from request and execute the request
-    json_object *queryJ = afb_req_json(request);
-    ModbusSensorT* sensor = (ModbusSensorT*) afb_req_get_vcbdata(request);
-    ModbusSensorRequest (request, sensor, queryJ);
-}
-
-static int SensorLoadOne(afb_api_t api, ModbusRtuT *rtu, ModbusSensorT *sensor, json_object *sensorJ) {
-    int err = 0;
-    const char *type=NULL;
-    const char *format=NULL;
-    const char *privilege=NULL;
-    afb_auth_t *authent=NULL;
-    json_object *argsJ=NULL;
-    char* apiverb;
-    ModbusSourceT source;
-
-    // should already be allocated
-    assert (sensorJ);
-
-    // set default values
-    memset(sensor, 0, sizeof (ModbusSensorT));
-    sensor->rtu   = rtu;
-    sensor->hertz = rtu->hertz;
-    sensor->iddle = rtu->iddle;
-    sensor->count = 1;
-
-    err = wrap_json_unpack(sensorJ, "{ss,ss,si,s?s,s?s,s?s,s?i,s?i,s?i,s?o !}",
-                "uid", &sensor->uid,
-                "type", &type,
-                "register", &sensor->registry,
-                "info", &sensor->info,
-                "privilege", &privilege,
-                "format", &format,
-                "hertz", &sensor->hertz,
-                "iddle", &sensor->iddle,
-                "count", &sensor->count,
-                "args", &argsJ);
-    if (err) {
-        AFB_API_ERROR(api, "SensorLoadOne: Fail to parse sensor: %s", json_object_to_json_string(sensorJ));
-        goto OnErrorExit;
-    }
-
-    // find modbus register type/function callback
-    sensor->function = mbFunctionFind (api, type);
-    if (!sensor->function) goto FunctionErrorExit;
-
-    // find encode/decode callback
-    sensor->format = mbEncoderFind (api, format);
-    if (!sensor->format) goto TypeErrorExit;
-
-    // Fulup should insert global auth here
-    sensor->api = api;
-    if (privilege) {
-       authent= (afb_auth_t*) calloc(1, sizeof (afb_auth_t));
-       authent->type = afb_auth_Permission;
-       authent->text = privilege;
-    }
-
-    // if defined call format init callback
-    if (sensor->format->initCB) {
-        source.sensor = sensor->uid;
-        source.api = api;
-        source.context=NULL;
-        err = sensor->format->initCB (&source, argsJ);
-        if (err) {
-            AFB_API_ERROR(api, "SensorLoadOne: fail to init format verb=%s", apiverb);
-            goto OnErrorExit;
-        }
-        // remember context for further encode/decode callback 
-        sensor->context = source.context;
-    }
-
-    err=asprintf (&apiverb, "%s/%s", rtu->prefix, sensor->uid);
-    err = afb_api_add_verb(api, (const char*) apiverb, sensor->info, SensorDynRequest, sensor, authent, 0, 0);
-    if (err) {
-        AFB_API_ERROR(api, "SensorLoadOne: fail to register API verb=%s", apiverb);
-        goto OnErrorExit;
-    }
-
-    return 0;
-
-TypeErrorExit:
-    AFB_API_ERROR(api, "SensorLoadOne: missing or invalid Modus Type code JSON=%s", json_object_to_json_string(sensorJ));
-    return -1;
-FunctionErrorExit:
-    AFB_API_ERROR(api, "SensorLoadOne: missing or invalid Modus Type=%s JSON=%s", type, json_object_to_json_string(sensorJ));
-    return -1;
-OnErrorExit:
-    return -1;    
-}
-
-static int ModbusLoadOne(afb_api_t api, ModbusRtuT *rtu, json_object *rtuJ) {
-    int err = 0;
-    json_object *sensorsJ;
-    afb_auth_t *authent=NULL;
-    char *adminCmd;
-
-    // should already be allocated
-    assert (rtuJ); 
-    assert (api);
-
-    memset(rtu, 0, sizeof (ModbusRtuT)); // default is empty
-    err = wrap_json_unpack(rtuJ, "{ss,s?s,s?s,s?s,s?i,s?s,s?i,s?i,s?i,s?i,s?i,s?i,so}",
-            "uid", &rtu->uid,
-            "info", &rtu->info,
-            "uri", &rtu->uri,
-            "privileges", &rtu->privileges,
-            "autostart", &rtu->autostart,
-            "prefix", &rtu->prefix,
-            "slaveid", &rtu->slaveid,
-            "debug", &rtu->debug,
-            "timeout", &rtu->timeout,
-            "idlen", &rtu->idlen,
-            "hertz", &rtu->hertz,
-            "iddle", &rtu->iddle,
-            "sensors", &sensorsJ);
-    if (err) {
-        AFB_API_ERROR(api, "Fail to parse rtu JSON : (%s)", json_object_to_json_string(rtuJ));
-        goto OnErrorExit;
-    }  
-
-    // create an admin command for RTU
-    if (rtu->privileges) {
-       authent= (afb_auth_t*) calloc(1, sizeof (afb_auth_t));
-       authent->type = afb_auth_Permission;
-       authent->text = rtu->privileges;
-    }
-
-    // if not API prefix let's use RTU uid
-    if (!rtu->prefix) rtu->prefix= rtu->uid;
-
-    // set default pooling frequency
-    if (!rtu->hertz) rtu->hertz=MB_DEFAULT_POLLING_FEQ;
-
-    err=asprintf (&adminCmd, "%s/%s", rtu->prefix, "admin");
-    err= afb_api_add_verb(api, adminCmd, rtu->info, RtuDynRequest, rtu, authent, 0, 0);
-    if (err) {
-        AFB_API_ERROR(api, "ModbusLoadOne: fail to register API uid=%s verb=%s info=%s", rtu->uid, adminCmd, rtu->info);
-        goto OnErrorExit;
-    }
-
-    // if uri is provided let's try to connect now
-    if (rtu->uri && rtu->autostart) {
-        err = ModbusRtuConnect (api, rtu);
-        if (err) {
-            AFB_API_ERROR(api, "ModbusLoadOne: fail to connect TCP/RTU uid=%s uri=%s", rtu->uid, rtu->uid);
-            if (rtu->autostart > 1) goto OnErrorExit;
-        }
-    }
-
-    // loop on sensors
-    if (json_object_is_type(sensorsJ, json_type_array)) {
-        int count = (int)json_object_array_length(sensorsJ);
-        rtu->sensors= (ModbusSensorT*)calloc(count + 1, sizeof (ModbusSensorT));
-
-        for (int idx = 0; idx < count; idx++) {
-            json_object *sensorJ = json_object_array_get_idx(sensorsJ, idx);
-            err = SensorLoadOne(api, rtu, &rtu->sensors[idx], sensorJ);
-            if (err) goto OnErrorExit;
-        }
-
-    } else {
-        rtu->sensors= (ModbusSensorT*) calloc(2, sizeof(ModbusSensorT));
-        err= SensorLoadOne(api, rtu, &rtu->sensors[0], sensorsJ);
-        if (err) goto OnErrorExit;
-    }
-
-    return 0;
-
-OnErrorExit:
-    return -1;    
-}
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
 
@@ -356,39 +136,6 @@ static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) 
     callCnt++;
     return 0;
 
-}
-
-static int ModbusConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
-    ModbusRtuT *rtus;
-    int err;
-
-    return 0;
-
-    // everything is done during initial config call
-    if (!rtusJ) return 0;
-
-    // modbus array is close with a nullvalue;
-    if (json_object_is_type(rtusJ, json_type_array)) {
-        int count = (int)json_object_array_length(rtusJ);
-        rtus =  (ModbusRtuT*) calloc(count + 1, sizeof (ModbusRtuT));
-
-        for (int idx = 0; idx < count; idx++) {
-            json_object *rtuJ = json_object_array_get_idx(rtusJ, idx);
-            err = ModbusLoadOne(api, &rtus[idx], rtuJ);
-            if (err) goto OnErrorExit;
-        }
-
-    } else {
-        rtus = (ModbusRtuT*)calloc(2, sizeof (ModbusRtuT));
-        err = ModbusLoadOne(api, &rtus[0], rtusJ);
-        if (err) goto OnErrorExit;
-    }
-
-    return 0;
-
-OnErrorExit:
-    AFB_API_ERROR (api, "Fail to initialise Modbus check Json Config");
-    return -1;    
 }
 
 
