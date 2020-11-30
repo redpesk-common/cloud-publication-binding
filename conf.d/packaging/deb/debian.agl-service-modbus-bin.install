@@ -1,8 +1,0 @@
-opt/AGL/agl-service-modbus
-opt/AGL/agl-service-modbus/lib
-opt/AGL/agl-service-modbus/lib/afb-modbus.so
-opt/AGL/agl-service-modbus/bin
-opt/AGL/agl-service-modbus/etc
-opt/AGL/agl-service-modbus/var
-opt/AGL/agl-service-modbus/htdocs
-opt/AGL/agl-service-modbus/htdocs/*

@@ -11,8 +11,9 @@ if [[ "$1" == "debug" ]]; then
 fi
 
 cd $WD
-$GDB afb-daemon --name rp-cloud --port=5678 --workdir=$WD \
---ldpath=/dev/null --binding=package/lib/rp-cloud.so \
+# XXX: process name in getBinderName() truncates it to 17 chars!
+$GDB afb-daemon --name redis-replica --port=5678 --workdir=$WD \
+--ldpath=/dev/null --binding=package/lib/redis-replication.so \
 --roothttp=package/htdocs --token= --tracereq=common -vvv \
 --ws-client=tcp:localhost:1212/redis-from-cloud \
 --ws-client=unix:/tmp/redis \

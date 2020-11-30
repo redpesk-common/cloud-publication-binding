@@ -1,6 +1,9 @@
 # gdb commands to load at startup via -x
 set breakpoint pending on
 set pagination off
-#break CtlConfigSearch
+
+break afbBindingV3entry
+break CtlConfigSearch
 break startReplication
+
 run

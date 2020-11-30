@@ -15,7 +15,7 @@
 ###########################################################################
 
 # Add target to project dependency list
-PROJECT_TARGET_ADD(cloud)
+PROJECT_TARGET_ADD(redis-replication)
 
 	# compile any C file starting with a lower case
 	file(GLOB CSOURCES [a-z]*.c)
@@ -30,7 +30,7 @@ PROJECT_TARGET_ADD(cloud)
 
 	# Binder exposes a unique public entry point
 	SET_TARGET_PROPERTIES(${TARGET_NAME} PROPERTIES
-		PREFIX "rp-"
+		PREFIX ""
 		LABELS "LIBRARY"
 		LINK_FLAGS ${BINDINGS_LINK_FLAG}
 		IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/*${TARGET_NAME}.so

@@ -17,13 +17,9 @@
 * limitations under the License.
 */
 
-
-// Le contexte de sensor loader au moment de l'API n'est retrouvé avec le request ****
-
 #define _GNU_SOURCE
 
-
-#include "modbus-binding.h"
+#include "redis-replication-binding.h"
 
 #include <ctl-config.h>
 #include <filescan-utils.h>
@@ -103,7 +99,7 @@ static void InfoCb (afb_req_t request) {
     afb_req_fail(request, API_REPLY_FAILURE, "Not implemented! Need to check Gwen's Markdown");
 }
 
-// Static verb not depending on Modbus json config file
+// Static verb not depending on main json config file
 static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
     { .verb = "ping",     .callback = PingCb    , .info = "Cloud API ping test"},
@@ -178,7 +174,8 @@ int afbBindingEntry(afb_api_t api) {
     char *searchPath, *envConfig;
     afb_api_t handle;
 
-    AFB_API_NOTICE(api, "Controller in afbBindingEntry");
+    // Use __func__ as the real name is mangled
+    AFB_API_NOTICE(api, "Controller in %s", __func__);
 
     // register Code Encoders before plugin get loaded
     //mbRegisterCoreEncoders();
@@ -189,10 +186,9 @@ int afbBindingEntry(afb_api_t api) {
     status=asprintf (&searchPath,"%s:%s/etc", envConfig, GetBindingDirPath(api));
     AFB_API_NOTICE(api, "Json config directory : %s", searchPath);
 
-    const char* prefix = "control";
-    const char* configPath = CtlConfigSearch(api, searchPath, prefix);
+    const char* configPath = CtlConfigSearch(api, searchPath, NULL);
     if (!configPath) {
-        AFB_API_ERROR(api, "afbBindingEntry: No %s-%s* config found in %s ", prefix, GetBinderName(), searchPath);
+        AFB_API_ERROR(api, "afbBindingEntry: No %s* config found in %s ", GetBinderName(), searchPath);
         status = ERROR;
         goto _exit_afbBindingEntry;
     }
