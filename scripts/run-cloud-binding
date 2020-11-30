@@ -14,5 +14,5 @@ $GDB afb-daemon --name rp-cloud --port=5678 --workdir=$WD \
 --ldpath=/dev/null --binding=package/lib/rp-cloud.so \
 --roothttp=package/htdocs --token= --tracereq=common -vvv \
 --ws-client=tcp:localhost:1212/redis-from-cloud \
---ws-client=unix:/tmp/redis
+--ws-client=unix:/tmp/redis \
 --monitoring
