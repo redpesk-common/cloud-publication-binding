@@ -23,6 +23,7 @@
 
 #include <ctl-config.h>
 #include <filescan-utils.h>
+#include <afb-timer.h>
 
 #ifndef MB_DEFAULT_POLLING_FEQ
 #define MB_DEFAULT_POLLING_FEQ 10
@@ -50,7 +51,32 @@ static void stopReplicationCb (afb_req_t request) {
     return;
 }
 
+static int redisReplTimerCb(TimerHandleT *timer) {
+
+    AFB_API_NOTICE(timer->api, "%s called", __func__);
+    return 1;
+}
+
 static void startReplicationCb (afb_req_t request) {
+    TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
+
+    timerHandle->count = 15;
+    timerHandle->delay = 1000;
+    timerHandle->uid = "Redis replication timer";
+    timerHandle->context = NULL;
+    timerHandle->evtSource = NULL;
+    timerHandle->api = afb_req_get_api(request);
+    timerHandle->callback = NULL;
+    timerHandle->freeCB = NULL;
+
+    // XXX: should we set context parameter?
+    TimerEvtStart(afb_req_get_api(request), timerHandle, redisReplTimerCb, NULL);
+
+    afb_req_success_f(request,json_object_new_string("Replication timer started"), NULL);
+    return;
+}
+
+static void crossCallCb (afb_req_t request) {
     char response[233];
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
