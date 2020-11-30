@@ -2,10 +2,11 @@
 # Redis replication binding
 
 WD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/build"
+GDB_CMD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/scripts/gdb-init"
 REDIS="$HOME/Documents/Dev/repos/iotbzh/rp-service-hiredis/build"
 
 if [[ "$1" == "debug" ]]; then
-    GDB="gdb --args"
+    GDB="gdb -x $GDB_CMD --args"
     #export AFB_DEBUG_BREAK=main-entry
 fi
 
