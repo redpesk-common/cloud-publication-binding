@@ -21,6 +21,10 @@
 
 	<div>
 		<button onclick="callbinder('rp-cloud','ping' ,{});">Send Redis replication ping</button></li>
+		<button onclick="callbinder('rp-cloud','start' ,{});">Start replication</button></li>
+		<button onclick="callbinder('rp-cloud','stop' ,{});">Stop replication</button></li>
+		<button onclick="callbinder('rp-cloud','unknown_verb', {});">Send unknown verb</button></li>
+
 		<button onclick="callbinder('redis','ping' ,{});">Send local Redis  ping</button></li>
 		<button onclick="callbinder('redis-from-cloud','ping' ,{});">Send remote Redis ping</button></li>
 
@@ -28,8 +32,6 @@
 
 		<button onclick="callbinder('rp-cloud','RTU0/product_info' ,{'action':'read'});">XXX: implement</button></li>
 		<button onclick="callbinder('unknown_api','ping' ,{});">Send unknown Api</button></li>
-
-		<button onclick="callbinder('rp-cloud','unknown_verb', {});">Send unknown verb</button></li>
 	</div>
 
 	<br>
