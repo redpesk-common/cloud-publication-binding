@@ -44,7 +44,7 @@ static CtlSectionT ctrlSections[] = {
     { .key = NULL }
 };
 
-static void stopRepl (afb_req_t request) {
+static void stopReplication (afb_req_t request) {
     char * msg = "Stopping replication";
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
@@ -54,23 +54,22 @@ static void stopRepl (afb_req_t request) {
     return;
 }
 
-static void startRepl (afb_req_t request) {
-    char response[32];
+static void startReplication (afb_req_t request) {
+    char response[233];
     json_object *queryJ =  afb_req_json(request);
     int err, status;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *requestJ, *responseJ = NULL;
 
-#define REDIS_CLOUD_API "redis-cloud"
+#define REDIS_CLOUD_API "redis-from-cloud"
 #define REDIS_CLOUD_VERB "ping"
 
-    AFB_API_NOTICE(request->api, "%s called", __func__);
-
+    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s", __func__, REDIS_CLOUD_VERB, REDIS_CLOUD_API);
     err = afb_api_call_sync(request->api, REDIS_CLOUD_API, REDIS_CLOUD_VERB, NULL, &responseJ, &returnedError, &returnedInfo);
     if (err) {
         AFB_API_ERROR(request->api,
 			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
-                  "ping", "redis-from-cloud",
+                  REDIS_CLOUD_VERB, REDIS_CLOUD_API,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
         status = ERROR;
@@ -78,7 +77,7 @@ static void startRepl (afb_req_t request) {
         afb_req_fail_f(request,json_object_new_string(response), NULL);
         return;
     }
-    snprintf (response, sizeof(response), "Replication started");
+    snprintf (response, sizeof(response), "Replication started. Remote side replied: %s", json_object_new_string(responseJ));
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
     return;
@@ -146,9 +145,9 @@ OnErrorExit:
 static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
     { .verb = "ping",     .callback = PingTest    , .info = "Cloud API ping test"},
-    { .verb = "info",     .callback = InfoRtu     , .info = "Modbus List RTUs"},
-    { .verb = "start",     .callback = startRepl     , .info = "Start replication"},
-    { .verb = "stop",     .callback = stopRepl     , .info = "Stop replication"},
+    { .verb = "info",     .callback = InfoRtu     , .info = "Cloud API info"},
+    { .verb = "start",     .callback = startReplication     , .info = "Start replication"},
+    { .verb = "stop",     .callback = stopReplication     , .info = "Stop replication"},
     { .verb = NULL} /* marker for end of the array */
 };
 
