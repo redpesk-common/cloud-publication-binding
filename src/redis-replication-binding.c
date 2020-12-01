@@ -43,11 +43,14 @@ static CtlSectionT ctrlSections[] = {
 };
 
 static void stopReplicationCb (afb_req_t request) {
-    char * msg = "Stopping replication";
+    afb_api_t api = afb_req_get_api(request);
+    TimerHandleT * timerHandle= afb_api_get_userdata(api);
 
     AFB_API_NOTICE(request->api, "%s called", __func__);
+    assert (timerHandle);
 
-    afb_req_success_f(request,json_object_new_string(msg), NULL);
+    TimerEvtStop(timerHandle);
+    afb_req_success_f(request,json_object_new_string("Replication stopped"), NULL);
     return;
 }
 
@@ -59,6 +62,7 @@ static int redisReplTimerCb(TimerHandleT *timer) {
 
 static void startReplicationCb (afb_req_t request) {
     TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
+    afb_api_t api = afb_req_get_api(request);
 
     timerHandle->count = 15;
     timerHandle->delay = 1000;
@@ -70,9 +74,10 @@ static void startReplicationCb (afb_req_t request) {
     timerHandle->freeCB = NULL;
 
     // XXX: should we set context parameter?
-    TimerEvtStart(afb_req_get_api(request), timerHandle, redisReplTimerCb, NULL);
+    TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
+    afb_api_set_userdata(api, timerHandle);
 
-    afb_req_success_f(request,json_object_new_string("Replication timer started"), NULL);
+    afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
     return;
 }
 
