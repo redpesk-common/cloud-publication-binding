@@ -2,8 +2,10 @@
 set breakpoint pending on
 set pagination off
 
-break afbBindingV3entry
-break CtlConfigSearch
-break startReplication
+#break afbBindingV3entry
+#break CtlConfigSearch
+#break startReplication
+#break tsMaggregateStubCb
+break redis-replication-binding.c:138
 
 run

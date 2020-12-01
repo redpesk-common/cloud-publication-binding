@@ -29,6 +29,12 @@
 #define MB_DEFAULT_POLLING_FEQ 10
 #endif
 
+#define REDIS_LOCAL_API "redis"
+#define REDIS_CLOUD_API "redis-from-cloud"
+#define REDIS_CLOUD_VERB "ping"
+
+#define REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB "ts_maggregate"
+
 #define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
 
@@ -64,8 +70,8 @@ static void startReplicationCb (afb_req_t request) {
     TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
     afb_api_t api = afb_req_get_api(request);
 
-    timerHandle->count = 15;
-    timerHandle->delay = 1000;
+    timerHandle->count = 1;
+    timerHandle->delay = 10;
     timerHandle->uid = "Redis replication timer";
     timerHandle->context = NULL;
     timerHandle->evtSource = NULL;
@@ -81,29 +87,72 @@ static void startReplicationCb (afb_req_t request) {
     return;
 }
 
-static void crossCallCb (afb_req_t request) {
+static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall) {
     char response[233];
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
-#define REDIS_CLOUD_API "redis-from-cloud"
-#define REDIS_CLOUD_VERB "ping"
-
-    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s", __func__, REDIS_CLOUD_VERB, REDIS_CLOUD_API);
-    err = afb_api_call_sync(request->api, REDIS_CLOUD_API, REDIS_CLOUD_VERB, NULL, &responseJ, &returnedError, &returnedInfo);
+    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s", __func__, verbToCall, apiToCall);
+    err = afb_api_call_sync(request->api, apiToCall, verbToCall, NULL, &responseJ, &returnedError, &returnedInfo);
     if (err) {
         AFB_API_ERROR(request->api,
 			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
-                  REDIS_CLOUD_VERB, REDIS_CLOUD_API,
+                  verbToCall, apiToCall,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
-        afb_req_fail_f(request,API_REPLY_FAILURE, "Replication failed");
+        afb_req_fail_f(request,API_REPLY_FAILURE, "Cross-call verb failed");
         return;
     }
-    snprintf (response, sizeof(response), "Replication started. Remote side replied: %s", json_object_to_json_string(responseJ));
+    snprintf (response, sizeof(response), "Cross-call performed. Remote side replied: %s", json_object_to_json_string(responseJ));
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
+    return;
+}
+
+static void tsMaggregateStubCb (afb_req_t request) {
+    json_object *argsJ = afb_req_json(request);
+    json_object * aggregJ;
+    char * id, class, type;
+    char * resstr = NULL;
+    uint32_t bucketSz;
+    int err;
+
+    AFB_API_DEBUG (request->api, "%s: %s", __func__, json_object_get_string(argsJ));
+
+    if (!argsJ) {
+        err = asprintf(&resstr, "missing arguments for verb call!");
+        goto fail;
+    }
+
+    err = wrap_json_unpack(argsJ, "{s:s,s:s,s:o !}", 
+        "id", &id,
+        "class", &class,
+        "aggregation", &aggregJ
+        );
+    if (err) {
+        err = asprintf(&resstr, "toplevel json format error in '%s'", json_object_get_string(argsJ));
+        goto fail;
+    }
+
+    err = wrap_json_unpack(aggregJ, "{s:s,s:?i !}", 
+        "type", &type,
+        "bucket", &bucketSz
+        );
+    if (err) {
+        err = asprintf(&resstr, "aggregation json format error in '%s'", json_object_get_string(argsJ));
+        goto fail;
+    }
+
+    afb_req_success_f(request,json_object_new_string("OK"), NULL);
+    goto done;
+
+fail:
+    afb_req_fail_f(request, API_REPLY_FAILURE, resstr);
+    return;
+
+done:
+    free (resstr);
     return;
 }
 
@@ -131,6 +180,7 @@ static afb_verb_t CtrlApiVerbs[] = {
     { .verb = "info",     .callback = InfoCb, .info = "Cloud API info"},
     { .verb = "start",     .callback = startReplicationCb     , .info = "Start DB replication"},
     { .verb = "stop",     .callback = stopReplicationCb     , .info = "Stop DB replication"},
+    { .verb = REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB,     .callback = tsMaggregateStubCb     , .info = "Local stub for ts_maggregate"},
     { .verb = NULL} /* marker for end of the array */
 };
 
@@ -158,7 +208,6 @@ static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) 
     return 0;
 
 }
-
 
 static int CtrlInitOneApi(afb_api_t api) {
     int err = 0;
@@ -195,10 +244,8 @@ static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
 
 int afbBindingEntry(afb_api_t api) {
     int status = 0;
-    int err = 0;
-    char *searchPath, *envConfig;
-    afb_api_t handle;
-
+    int err = 0; char *searchPath, *envConfig; afb_api_t handle;
+   
     // Use __func__ as the real name is mangled
     AFB_API_NOTICE(api, "Controller in %s", __func__);
 
