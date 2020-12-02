@@ -5,7 +5,8 @@ set pagination off
 #break afbBindingV3entry
 #break CtlConfigSearch
 #break startReplication
-#break tsMaggregateStubCb
-break redis-replication-binding.c:138
+break tsMaggregateStubCb
+#break redis-replication-binding.c:138
+break callVerb
 
 run

@@ -1,8 +1,9 @@
 /*
-* Copyright (C) 2016-2019 "IoT.bzh"
+* Copyright (C) 2016-2020 "IoT.bzh"
 * Author Fulup Ar Foll <fulup@iot.bzh>
-* Author Fulup Ar Foll <romain@iot.bzh>
-* Author Fulup Ar Foll <sebastien@iot.bzh>
+* Author Romain Forlot <romain@iot.bzh>
+* Author Sebastien Douheret <sebastien@iot.bzh>
+* Author Vincent Rubiolo <vincent.rubiolo@iot.bzh>
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -29,6 +30,8 @@
 #define MB_DEFAULT_POLLING_FEQ 10
 #endif
 
+// XXX: retrieve those from config file
+#define REDIS_REPL_API "rp-cloud"
 #define REDIS_LOCAL_API "redis"
 #define REDIS_CLOUD_API "redis-from-cloud"
 #define REDIS_CLOUD_VERB "ping"
@@ -39,6 +42,8 @@
 #define API_REPLY_FAILURE "failed"
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
+static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+                      json_object * argsJ);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
@@ -69,7 +74,11 @@ static int redisReplTimerCb(TimerHandleT *timer) {
 static void startReplicationCb (afb_req_t request) {
     TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
     afb_api_t api = afb_req_get_api(request);
+    json_object * aggregArgsJ;
+    json_object * aggregArgsParamsJ;
+    int err;
 
+    // XXX: set those from configuration file
     timerHandle->count = 1;
     timerHandle->delay = 10;
     timerHandle->uid = "Redis replication timer";
@@ -83,18 +92,36 @@ static void startReplicationCb (afb_req_t request) {
     TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
     afb_api_set_userdata(api, timerHandle);
 
+    err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
+    if (err){
+        afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation parameters argument packing failed!");
+        return;
+    }
+
+    err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "id", "vincent_aggreg_id", "class", "vincent_sensor",
+                             "aggregation", "type", "avg", "bucket", 500);
+    if (err){
+        afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation argument packing failed!");
+        return;
+    }
+
+    // Request resampling being done for all future records
+    callVerb (request, REDIS_REPL_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
+
     afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
     return;
 }
 
-static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall) {
+static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+                      json_object * argsJ) {
     char response[233];
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
-    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s", __func__, verbToCall, apiToCall);
-    err = afb_api_call_sync(request->api, apiToCall, verbToCall, NULL, &responseJ, &returnedError, &returnedInfo);
+    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s with args %s", __func__, verbToCall, apiToCall, 
+                    json_object_to_json_string(argsJ));
+    err = afb_api_call_sync(request->api, apiToCall, verbToCall, argsJ, &responseJ, &returnedError, &returnedInfo);
     if (err) {
         AFB_API_ERROR(request->api,
 			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
