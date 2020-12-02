@@ -89,8 +89,8 @@ static void startReplicationCb (afb_req_t request) {
     timerHandle->freeCB = NULL;
 
     // XXX: should we set context parameter?
-    TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
-    afb_api_set_userdata(api, timerHandle);
+    //TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
+    //afb_api_set_userdata(api, timerHandle);
 
     err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
     if (err){
@@ -106,7 +106,8 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    callVerb (request, REDIS_REPL_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
+    //callVerb (request, REDIS_REPL_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
+    callVerb (request, REDIS_REPL_API, "ping", NULL);
 
     afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
     return;
