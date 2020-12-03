@@ -37,6 +37,7 @@
 #define REDIS_CLOUD_VERB "ping"
 
 #define REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB "ts_maggregate"
+#define REDIS_LOCAL_TS_MAGGREGATE_STUB_API REDIS_LOCAL_API
 
 #define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
@@ -73,7 +74,6 @@ static int redisReplTimerCb(TimerHandleT *timer) {
 
 static void startReplicationCb (afb_req_t request) {
     TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
-    afb_api_t api = afb_req_get_api(request);
     json_object * aggregArgsJ;
     json_object * aggregArgsParamsJ;
     int err;
@@ -106,10 +106,10 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    //callVerb (request, REDIS_REPL_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
-    callVerb (request, REDIS_REPL_API, "ping", NULL);
+    callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
+    //callVerb (request, REDIS_CLOUD_API, "ping", NULL);
 
-    afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
+    //afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
     return;
 }
 
@@ -138,52 +138,6 @@ static void callVerb (afb_req_t request, const char * apiToCall, const char * ve
     return;
 }
 
-static void tsMaggregateStubCb (afb_req_t request) {
-    json_object *argsJ = afb_req_json(request);
-    json_object * aggregJ;
-    char * id, class, type;
-    char * resstr = NULL;
-    uint32_t bucketSz;
-    int err;
-
-    AFB_API_DEBUG (request->api, "%s: %s", __func__, json_object_get_string(argsJ));
-
-    if (!argsJ) {
-        err = asprintf(&resstr, "missing arguments for verb call!");
-        goto fail;
-    }
-
-    err = wrap_json_unpack(argsJ, "{s:s,s:s,s:o !}", 
-        "id", &id,
-        "class", &class,
-        "aggregation", &aggregJ
-        );
-    if (err) {
-        err = asprintf(&resstr, "toplevel json format error in '%s'", json_object_get_string(argsJ));
-        goto fail;
-    }
-
-    err = wrap_json_unpack(aggregJ, "{s:s,s:?i !}", 
-        "type", &type,
-        "bucket", &bucketSz
-        );
-    if (err) {
-        err = asprintf(&resstr, "aggregation json format error in '%s'", json_object_get_string(argsJ));
-        goto fail;
-    }
-
-    afb_req_success_f(request,json_object_new_string("OK"), NULL);
-    goto done;
-
-fail:
-    afb_req_fail_f(request, API_REPLY_FAILURE, resstr);
-    return;
-
-done:
-    free (resstr);
-    return;
-}
-
 static void PingCb (afb_req_t request) {
     static int count=0;
     char response[32];
@@ -208,7 +162,6 @@ static afb_verb_t CtrlApiVerbs[] = {
     { .verb = "info",     .callback = InfoCb, .info = "Cloud API info"},
     { .verb = "start",     .callback = startReplicationCb     , .info = "Start DB replication"},
     { .verb = "stop",     .callback = stopReplicationCb     , .info = "Stop DB replication"},
-    { .verb = REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB,     .callback = tsMaggregateStubCb     , .info = "Local stub for ts_maggregate"},
     { .verb = NULL} /* marker for end of the array */
 };
 
