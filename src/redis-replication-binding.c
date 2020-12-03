@@ -44,7 +44,7 @@
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
 static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
-                      json_object * argsJ);
+                      json_object * argsJ, const char * message);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
@@ -106,33 +106,35 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ);
-    //callVerb (request, REDIS_CLOUD_API, "ping", NULL);
+    callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ,
+              NULL);
 
-    //afb_req_success_f(request,json_object_new_string("Replication started"), NULL);
     return;
 }
 
 static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
-                      json_object * argsJ) {
+                      json_object * argsJ, const char * message) {
     char response[233];
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
-    AFB_API_NOTICE(request->api, "%s: calling %s verb of API %s with args %s", __func__, verbToCall, apiToCall, 
-                    json_object_to_json_string(argsJ));
+    AFB_API_DEBUG(request->api, "%s: calling %s/%s with args %s", __func__, apiToCall, verbToCall,
+                  json_object_to_json_string(argsJ));
     err = afb_api_call_sync(request->api, apiToCall, verbToCall, argsJ, &responseJ, &returnedError, &returnedInfo);
     if (err) {
         AFB_API_ERROR(request->api,
-			      "Something went wrong during call to verb '%s' of api '%s' with error '%s' and info '%s'",
+			      "error during call to verb '%s' of api '%s' with error '%s' and info '%s'",
                   verbToCall, apiToCall,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
-        afb_req_fail_f(request,API_REPLY_FAILURE, "Cross-call verb failed");
+        afb_req_fail_f(request,API_REPLY_FAILURE, "%s:%s call failed", apiToCall, verbToCall);
         return;
     }
-    snprintf (response, sizeof(response), "Cross-call performed. Remote side replied: %s", json_object_to_json_string(responseJ));
+    AFB_API_DEBUG(request->api, "%s: %s/%s call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
+                  json_object_to_json_string(responseJ));
+
+    snprintf (response, sizeof(response), "%s", message == NULL ? "OK" : message);
     afb_req_success_f(request,json_object_new_string(response), NULL);
 
     return;
