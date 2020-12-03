@@ -43,7 +43,7 @@
 #define API_REPLY_FAILURE "failed"
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+static int callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, const char * message);
 
 // Config Section definition (note: controls section index should match handle
@@ -76,22 +76,12 @@ static void startReplicationCb (afb_req_t request) {
     TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
     json_object * aggregArgsJ;
     json_object * aggregArgsParamsJ;
+    afb_api_t api = afb_req_get_api(request);
     int err;
 
-    // XXX: set those from configuration file
-    timerHandle->count = 1;
-    timerHandle->delay = 10;
-    timerHandle->uid = "Redis replication timer";
-    timerHandle->context = NULL;
-    timerHandle->evtSource = NULL;
-    timerHandle->api = afb_req_get_api(request);
-    timerHandle->callback = NULL;
-    timerHandle->freeCB = NULL;
+    assert (api);
 
-    // XXX: should we set context parameter?
-    //TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
-    //afb_api_set_userdata(api, timerHandle);
-
+    // XXX: should get the query from config file
     err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
     if (err){
         afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation parameters argument packing failed!");
@@ -106,15 +96,33 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ,
+    err = callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ,
               NULL);
+    if (err) {
+        afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
+        return;
+    }
 
+    // XXX: set those from configuration file
+    timerHandle->count = 1;
+    timerHandle->delay = 10;
+    timerHandle->uid = "Redis replication timer";
+    timerHandle->context = NULL;
+    timerHandle->evtSource = NULL;
+    timerHandle->api = afb_req_get_api(request);
+    timerHandle->callback = NULL;
+    timerHandle->freeCB = NULL;
+
+    // XXX: should we set context parameter?
+    afb_api_set_userdata(api, timerHandle);
+    TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
+
+    afb_req_success_f(request,json_object_new_string("replication started successfully"), NULL);
     return;
 }
 
-static void callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+static int callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, const char * message) {
-    char response[233];
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
@@ -128,16 +136,12 @@ static void callVerb (afb_req_t request, const char * apiToCall, const char * ve
                   verbToCall, apiToCall,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
-        afb_req_fail_f(request,API_REPLY_FAILURE, "%s:%s call failed", apiToCall, verbToCall);
-        return;
+        return -1;
     }
     AFB_API_DEBUG(request->api, "%s: %s/%s call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
                   json_object_to_json_string(responseJ));
 
-    snprintf (response, sizeof(response), "%s", message == NULL ? "OK" : message);
-    afb_req_success_f(request,json_object_new_string(response), NULL);
-
-    return;
+    return 0;
 }
 
 static void PingCb (afb_req_t request) {
