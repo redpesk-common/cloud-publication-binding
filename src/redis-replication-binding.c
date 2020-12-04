@@ -39,6 +39,7 @@
 #define REDIS_LOCAL_API "redis"
 #define REDIS_LOCAL_VERB_TS_MRANGE "ts_mrange"
 #define REDIS_LOCAL_VERB_TS_MAGGREGATE "ts_maggregate"
+#define REDIS_LOCAL_VERB_TS_JINSERT "ts_jinsert"
 
 #define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
@@ -72,17 +73,33 @@ static void stopReplicationCb (afb_req_t request) {
     return;
 }
 
-void tsMrangeCallCb(void *closure, struct json_object *object, const char *error, 
+void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
                     const char * info, afb_api_t api) {
-    AFB_API_DEBUG(api, "%s called", __func__);
+    json_object * jInsertArgsJ; 
+    int err;
+
+    AFB_API_DEBUG(api, "%s: called", __func__);
 
     if (error){
-        AFB_API_ERROR(api, "failure to retrieve database records via mrange(): %s!",
+        AFB_API_ERROR(api, "failure to retrieve database records via ts_mrange(): %s!",
                       info == NULL ? "[no info]": info);
         return;
     }
 
-    AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(object));
+    AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
+
+    // XXX: O seems necessary otherwise we assert() because of refcnt issue. Why?
+    err = wrap_json_pack (&jInsertArgsJ, "{s:s, s:O}", "class", "sensor2", "data", mRangeResultJ);
+    if (err){
+        AFB_API_ERROR(api, "failure to pack ts_jinsert() arguments!");
+        return;
+    }
+
+    err = callVerbSync (api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_JINSERT, jInsertArgsJ);
+    if (err) {
+        AFB_API_ERROR(api, "failure to call ts_jinsert() to replicate data!");
+        return;
+    }
     }
 
 static int redisReplTimerCb(TimerHandleT *timer) {
@@ -134,8 +151,8 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // XXX: set those from configuration file
-    timerHandle->count = 1;
-    timerHandle->delay = 10;
+    timerHandle->count = 10;
+    timerHandle->delay = 100;
     timerHandle->uid = "Redis replication timer";
     timerHandle->context = NULL;
     timerHandle->evtSource = NULL;
