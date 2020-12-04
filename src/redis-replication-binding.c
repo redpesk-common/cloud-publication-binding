@@ -44,8 +44,13 @@
 #define API_REPLY_FAILURE "failed"
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static int callVerb (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                      json_object * argsJ, const char * message);
+static int callVerbSync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                         json_object * argsJ);
+static int callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                          json_object * argsJ, const char * message, void
+                          (*callback)( void *closure, struct json_object
+                          *object, const char *error, const char * info,
+                          afb_api_t api), void *closure);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
@@ -80,8 +85,7 @@ static int redisReplTimerCb(TimerHandleT *timer) {
         return 0;
     }
 
-    err = callVerb (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ,
-              NULL);
+    err = callVerbSync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ);
     if (err) {
         AFB_API_ERROR(api, "failure to retrieve database records via mrange()!");
         return 0;
@@ -113,8 +117,7 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    err = callVerb (request->api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ,
-              NULL);
+    err = callVerbSync (request->api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ);
     if (err) {
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
         return;
@@ -136,13 +139,13 @@ static void startReplicationCb (afb_req_t request) {
     return;
 }
 
-static int callVerb (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                      json_object * argsJ, const char * message) {
+static int callVerbSync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                      json_object * argsJ) {
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
-    AFB_API_DEBUG(api, "%s: calling %s/%s with args %s", __func__, apiToCall, verbToCall,
+    AFB_API_DEBUG(api, "%s: %s/%s sync call with args %s", __func__, apiToCall, verbToCall,
                   json_object_to_json_string(argsJ));
 
     err = afb_api_call_sync(api, apiToCall, verbToCall, argsJ, &responseJ, &returnedError, &returnedInfo);
@@ -157,9 +160,28 @@ static int callVerb (afb_api_t api, const char * apiToCall, const char * verbToC
         free(returnedInfo);
         return -1;
     }
-    AFB_API_DEBUG(api, "%s: %s/%s call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
+    AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
                   json_object_to_json_string(responseJ));
 
+    return 0;
+}
+
+static int callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                          json_object * argsJ, const char * message,
+                          void (*callback)(
+                            void *closure,
+                            struct json_object *object,
+                            const char *error,
+                            const char * info,
+                            afb_api_t api),
+			              void *closure) {
+
+    AFB_API_DEBUG(api, "%s: %s/%s async call with args %s", __func__, apiToCall, verbToCall,
+                  json_object_to_json_string(argsJ));
+
+    afb_api_call(api, apiToCall, verbToCall, argsJ, callback, closure);
+
+    AFB_API_DEBUG(api, "%s: %s/%s async call performed", __func__, apiToCall, verbToCall);
     return 0;
 }
 
