@@ -46,8 +46,8 @@
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
 static int callVerbSync (afb_api_t api, const char * apiToCall, const char * verbToCall,
                          json_object * argsJ);
-static int callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                          json_object * argsJ, const char * message, void
+static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                          json_object * argsJ, void
                           (*callback)( void *closure, struct json_object
                           *object, const char *error, const char * info,
                           afb_api_t api), void *closure);
@@ -72,12 +72,25 @@ static void stopReplicationCb (afb_req_t request) {
     return;
 }
 
+void tsMrangeCallCb(void *closure, struct json_object *object, const char *error, 
+                    const char * info, afb_api_t api) {
+    AFB_API_DEBUG(api, "%s called", __func__);
+
+    if (error){
+        AFB_API_ERROR(api, "failure to retrieve database records via mrange(): %s!",
+                      info == NULL ? "[no info]": info);
+        return;
+    }
+
+    AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(object));
+    }
+
 static int redisReplTimerCb(TimerHandleT *timer) {
     int err;
     json_object * mrangeArgsJ;
     afb_api_t api = timer->api;
 
-    AFB_API_NOTICE(api, "%s called", __func__);
+    AFB_API_DEBUG(api, "%s called", __func__);
 
     err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", "sensor2", "fromts", "-", "tots", "+");
     if (err){
@@ -85,11 +98,8 @@ static int redisReplTimerCb(TimerHandleT *timer) {
         return 0;
     }
 
-    err = callVerbSync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ);
-    if (err) {
-        AFB_API_ERROR(api, "failure to retrieve database records via mrange()!");
-        return 0;
-    }
+    // XXX: what happens if we are called quicker than the ts_mrange() call can complete?
+    callVerbAsync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, tsMrangeCallCb, NULL);
     return 1;
 }
 
@@ -166,8 +176,8 @@ static int callVerbSync (afb_api_t api, const char * apiToCall, const char * ver
     return 0;
 }
 
-static int callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                          json_object * argsJ, const char * message,
+static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                          json_object * argsJ,
                           void (*callback)(
                             void *closure,
                             struct json_object *object,
@@ -182,7 +192,6 @@ static int callVerbAsync (afb_api_t api, const char * apiToCall, const char * ve
     afb_api_call(api, apiToCall, verbToCall, argsJ, callback, closure);
 
     AFB_API_DEBUG(api, "%s: %s/%s async call performed", __func__, apiToCall, verbToCall);
-    return 0;
 }
 
 static void PingCb (afb_req_t request) {
