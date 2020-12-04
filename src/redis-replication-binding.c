@@ -30,20 +30,21 @@
 #define MB_DEFAULT_POLLING_FEQ 10
 #endif
 
-// XXX: retrieve those from config file
+// XXX: retrieve those API configs below from a config file
 #define REDIS_REPL_API "rp-cloud"
-#define REDIS_LOCAL_API "redis"
-#define REDIS_CLOUD_API "redis-from-cloud"
-#define REDIS_CLOUD_VERB "ping"
 
-#define REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB "ts_maggregate"
-#define REDIS_LOCAL_TS_MAGGREGATE_STUB_API REDIS_LOCAL_API
+#define REDIS_CLOUD_API "redis-from-cloud"
+#define REDIS_CLOUD_VERB_PING "ping"
+
+#define REDIS_LOCAL_API "redis"
+#define REDIS_LOCAL_VERB_TS_MRANGE "ts_mrange"
+#define REDIS_LOCAL_VERB_TS_MAGGREGATE "ts_maggregate"
 
 #define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
 
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static int callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+static int callVerb (afb_api_t api, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, const char * message);
 
 // Config Section definition (note: controls section index should match handle
@@ -67,8 +68,24 @@ static void stopReplicationCb (afb_req_t request) {
 }
 
 static int redisReplTimerCb(TimerHandleT *timer) {
+    int err;
+    json_object * mrangeArgsJ;
+    afb_api_t api = timer->api;
 
-    AFB_API_NOTICE(timer->api, "%s called", __func__);
+    AFB_API_NOTICE(api, "%s called", __func__);
+
+    err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", "sensor2", "fromts", "-", "tots", "+");
+    if (err){
+        AFB_API_ERROR(api, "mrange() argument packing failed!");
+        return 0;
+    }
+
+    err = callVerb (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ,
+              NULL);
+    if (err) {
+        AFB_API_ERROR(api, "failure to retrieve database records via mrange()!");
+        return 0;
+    }
     return 1;
 }
 
@@ -96,7 +113,7 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    err = callVerb (request, REDIS_LOCAL_TS_MAGGREGATE_STUB_API, REDIS_LOCAL_TS_MAGGREGATE_STUB_VERB, aggregArgsJ,
+    err = callVerb (request->api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ,
               NULL);
     if (err) {
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
@@ -113,32 +130,34 @@ static void startReplicationCb (afb_req_t request) {
     timerHandle->callback = NULL;
     timerHandle->freeCB = NULL;
 
-    // XXX: should we set context parameter?
-    afb_api_set_userdata(api, timerHandle);
     TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
 
     afb_req_success_f(request,json_object_new_string("replication started successfully"), NULL);
     return;
 }
 
-static int callVerb (afb_req_t request, const char * apiToCall, const char * verbToCall,
+static int callVerb (afb_api_t api, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, const char * message) {
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
-    AFB_API_DEBUG(request->api, "%s: calling %s/%s with args %s", __func__, apiToCall, verbToCall,
+    AFB_API_DEBUG(api, "%s: calling %s/%s with args %s", __func__, apiToCall, verbToCall,
                   json_object_to_json_string(argsJ));
-    err = afb_api_call_sync(request->api, apiToCall, verbToCall, argsJ, &responseJ, &returnedError, &returnedInfo);
+
+    err = afb_api_call_sync(api, apiToCall, verbToCall, argsJ, &responseJ, &returnedError, &returnedInfo);
+
     if (err) {
-        AFB_API_ERROR(request->api,
+        AFB_API_ERROR(api,
 			      "error during call to verb '%s' of api '%s' with error '%s' and info '%s'",
                   verbToCall, apiToCall,
                   returnedError ? returnedError : "not returned",
 			      returnedInfo ? returnedInfo : "not returned");
+        free(returnedError);
+        free(returnedInfo);
         return -1;
     }
-    AFB_API_DEBUG(request->api, "%s: %s/%s call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
+    AFB_API_DEBUG(api, "%s: %s/%s call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
                   json_object_to_json_string(responseJ));
 
     return 0;
@@ -263,7 +282,9 @@ int afbBindingEntry(afb_api_t api) {
     AFB_API_NOTICE(api, "Controller API='%s' info='%s'", ctrlConfig->api, ctrlConfig->info);
 
     // create one API per config file (Pre-V3 return code ToBeChanged)
-    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 1, CtrlLoadOneApi, ctrlConfig);
+    // XXX: concurrency should not be enabled in the controller
+    // XXX: note that this will prevent cross-verbs calls in the same API
+    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApi, ctrlConfig);
     if (!handle){
         AFB_API_ERROR(api, "afbBindingEntry failed to create API");
         status = ERROR;
