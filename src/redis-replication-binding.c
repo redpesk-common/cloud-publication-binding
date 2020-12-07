@@ -125,7 +125,7 @@ static int redisReplTimerCb(TimerHandleT *timer) {
 }
 
 static void startReplicationCb (afb_req_t request) {
-    TimerHandleT *timerHandle = malloc(sizeof (TimerHandleT));
+    TimerHandleT *timerHandle = calloc(1, sizeof (TimerHandleT));
     json_object * aggregArgsJ;
     json_object * aggregArgsParamsJ;
     afb_api_t api = afb_req_get_api(request);
@@ -230,7 +230,7 @@ static void PingCb (afb_req_t request) {
 }
 
 static void InfoCb (afb_req_t request) {
-    AFB_API_NOTICE(request->api, "%s called. Not implemented !", __func__);
+    AFB_API_ERROR(request->api, "%s called. Not implemented !", __func__);
     afb_req_fail(request, API_REPLY_FAILURE, "Not implemented! Need to check Gwen's Markdown");
 }
 
