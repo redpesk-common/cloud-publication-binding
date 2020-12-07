@@ -4,6 +4,7 @@
 WD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/build"
 GDB_CMD="$HOME/Documents/Dev/repos/vrubiolo/rp-service-cloud/scripts/gdb-init"
 REDIS="$HOME/Documents/Dev/repos/iotbzh/rp-service-hiredis/build"
+GWEN_UI="$HOME/tmp/redpesk-marine/Web_binder_app/afb-ui-devtool/dist"
 
 if [[ "$1" == "debug" ]]; then
     GDB="gdb -x $GDB_CMD --args"
@@ -14,7 +15,8 @@ cd $WD
 # XXX: process name in getBinderName() truncates it to 17 chars!
 $GDB afb-binder --name redis-replica --port=5678 --workdir=$WD \
 --binding=package/lib/redis-replication.so \
---roothttp=package/htdocs --tracereq=common -vvv \
+--roothttp=$GWEN_UI \
+--tracereq=common -vvv \
 --ws-client=tcp:localhost:1212/redis-from-cloud \
 --ws-client=unix:/tmp/redis \
 --monitoring
