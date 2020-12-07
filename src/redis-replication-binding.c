@@ -30,6 +30,8 @@
 #define MB_DEFAULT_POLLING_FEQ 10
 #endif
 
+#define TIMER_RUN_FOREVER -1
+
 // XXX: retrieve those API configs below from a config file
 #define REDIS_REPL_API "rp-cloud"
 
@@ -65,7 +67,7 @@ static void stopReplicationCb (afb_req_t request) {
     afb_api_t api = afb_req_get_api(request);
     TimerHandleT * timerHandle= afb_api_get_userdata(api);
 
-    AFB_API_NOTICE(request->api, "%s called", __func__);
+    AFB_API_DEBUG(request->api, "%s called", __func__);
     assert (timerHandle);
 
     TimerEvtStop(timerHandle);
@@ -104,10 +106,12 @@ void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char
 
 static int redisReplTimerCb(TimerHandleT *timer) {
     int err;
+    static int callCnt = 0;
     json_object * mrangeArgsJ;
     afb_api_t api = timer->api;
 
-    AFB_API_DEBUG(api, "%s called", __func__);
+    callCnt++;
+    AFB_API_DEBUG(api, "%s called %d times", __func__, callCnt);
 
     err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", "sensor2", "fromts", "-", "tots", "+");
     if (err){
@@ -151,15 +155,17 @@ static void startReplicationCb (afb_req_t request) {
     }
 
     // XXX: set those from configuration file
-    timerHandle->count = 10;
+    timerHandle->count = TIMER_RUN_FOREVER;
     timerHandle->delay = 100;
     timerHandle->uid = "Redis replication timer";
     timerHandle->context = NULL;
-    timerHandle->evtSource = NULL;
+    timerHandle->evtSource = NULL; // should always be NULL as per the docs
     timerHandle->api = afb_req_get_api(request);
     timerHandle->callback = NULL;
     timerHandle->freeCB = NULL;
 
+    // XXX: this will break the controller if we are using plugins
+    afb_api_set_userdata(timerHandle->api, timerHandle);
     TimerEvtStart(api, timerHandle, redisReplTimerCb, NULL);
 
     afb_req_success_f(request,json_object_new_string("replication started successfully"), NULL);
