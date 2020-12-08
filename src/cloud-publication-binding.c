@@ -1,9 +1,9 @@
 /*
-* Copyright (C) 2016-2020 "IoT.bzh"
-* Author Fulup Ar Foll <fulup@iot.bzh>
-* Author Romain Forlot <romain@iot.bzh>
+* Copyright (C) 2020 "IoT.bzh"
 * Author Sebastien Douheret <sebastien@iot.bzh>
 * Author Vincent Rubiolo <vincent.rubiolo@iot.bzh>
+* Author Fulup Ar Foll <fulup@iot.bzh>
+* Author Romain Forlot <romain@iot.bzh>
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 
 #define _GNU_SOURCE
 
-#include "redis-replication-binding.h"
+#include "cloud-publication-binding.h"
 
 #include <ctl-config.h>
 #include <filescan-utils.h>

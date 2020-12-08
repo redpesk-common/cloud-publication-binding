@@ -1,4 +1,4 @@
-# Redis replication Binding
+# Cloud Publication Binding
 
 XXX: fill me in.
 
@@ -7,24 +7,28 @@ XXX: fill me in.
 ## Design
 
 * Check if /start and /stop is OK or if we want autostart
-* Settle for final name: either cloud-replication-binding or data-replication-binding
   
 ## Implementation
 
 * Define dynamic configuration
   * Frequency for cloud upload
+  * Sensor names
 * Disconnection and reconnection to/from cloud
 * Verbs
   * design /info
   * check if /help is still needed
 * Connection
-  * Connect to Thierry's binding (via require)
   * Add Thierry's ts_minsert() API
 
 ## FIXMES
 
-* Investigate and remove XXX from codebase
 * Restart does not work after stop
+* Source cleanup for publication
+  * Investigate and remove XXX from codebase
+  * Remove XXX mentions from doc
+  * License headers + copyright dates + authors on all files
+  * Remove scripts/
+  * Remove TODO section from README
 
 ## Integration
 

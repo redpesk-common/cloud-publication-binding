@@ -15,7 +15,7 @@
 ###########################################################################
 
 # Add target to project dependency list
-PROJECT_TARGET_ADD(redis-replication)
+PROJECT_TARGET_ADD(cloud-publication)
 
 	# compile any C file starting with a lower case
 	file(GLOB CSOURCES [a-z]*.c)

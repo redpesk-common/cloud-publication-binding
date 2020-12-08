@@ -1,10 +1,10 @@
 {
     "$schema": "http://iot.bzh/download/public/schema/json/ctl-schema.json",
     "metadata": {
-      "uid": "rp-cloud-svc",
+      "uid": "cloud-publication-svc",
       "version": "1.0",
-      "api": "rp-cloud",
-      "info": "Redpesk cloud replication service",
+      "api": "cloud-pub",
+      "info": "Redpesk cloud publication service",
       "require":["redis-from-cloud", "redis"]
     },
     "redis-cloud": [{

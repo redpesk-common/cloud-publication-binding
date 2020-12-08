@@ -19,7 +19,7 @@
 ##################################################
 # Control Policy Config file
 ##################################################
-PROJECT_TARGET_ADD(redis-replication-config)
+PROJECT_TARGET_ADD(cloud-publication-config)
 
 	file(GLOB CONF_FILES "*.json")
 

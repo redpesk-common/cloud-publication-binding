@@ -1,7 +1,8 @@
 ###########################################################################
-# Copyright 2015, 2016, 2017, 2018, 2019 IoT.bzh
+# Copyright 2020 IoT.bzh
 #
-# author: Fulup Ar Foll <fulup@iot.bzh>
+# author: Vincent Rubiolo <vincent.rubiolo@iot.bzh> 
+# based on work from Fulup Le Foll (fulup@iot.bzh)
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,18 +21,17 @@ set(CMAKE_INSTALL_SO_NO_EXE 0)
 
 # Project Info
 # ------------------
-set(PROJECT_NAME redis-replication)
+set(PROJECT_NAME cloud-publication)
 set(PROJECT_VERSION "1.0")
-set(PROJECT_PRETTY_NAME "Redis replication binding")
-set(PROJECT_DESCRIPTION "Provide an AGL Redis replication Binding")
+set(PROJECT_PRETTY_NAME "Cloud publication binding")
+set(PROJECT_DESCRIPTION "Provide an AGL cloud publication binding")
 set(PROJECT_URL "XXX")
 set(PROJECT_ICON "icon.png")
 set(PROJECT_AUTHOR "Iot-Team")
 set(PROJECT_AUTHOR_MAIL "secretariat@iot.bzh")
 set(PROJECT_LICENSE "APL2.0")
 set(PROJECT_LANGUAGES,"C")
-# XXX: update to final name
-set(API_NAME "redis-replicate")
+set(API_NAME "cloud-publication")
 
 # Where are stored default templates files from submodule or subtree app-templates in your project tree
 # relative to the root project directory
@@ -84,7 +84,7 @@ set (PKG_REQUIRED_LIST
 if(IS_DIRECTORY $ENV{HOME}/opt/afb-monitoring)
 set(MONITORING_ALIAS "--alias=/monitoring:$ENV{HOME}/opt/afb-monitoring")
 endif()
-set(CLOSING_MESSAGE "Debug from buildir: afb-daemon --name=redis-replication --port=1234 ${MONITORING_ALIAS} --workdir=$ENV{PWD}/package --ldpaths=. --roothttp=../htdocs --token= -vvv")
+set(CLOSING_MESSAGE "Debug from buildir: afb-daemon --name=cloud-publication --port=1234 ${MONITORING_ALIAS} --workdir=$ENV{PWD}/package --ldpaths=. --roothttp=../htdocs --token= -vvv")
 set(PACKAGE_MESSAGE "Install widget file using in the target : afm-util install ${PROJECT_NAME}.wgt")
 
 # Customize link option
@@ -141,7 +141,7 @@ set(WIDGET_TYPE application/vnd.agl.service)
 # This is the file that will be executed, loaded,
 # at launch time by the application framework.
 #
-set(WIDGET_ENTRY_POINT lib/redis-replication.so)
+set(WIDGET_ENTRY_POINT lib/cloud-publication.so)
 
 # Optional dependencies order
 # ---------------------------
