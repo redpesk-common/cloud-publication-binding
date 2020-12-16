@@ -18,7 +18,7 @@ dnf install cloud-publication-binding
 
 ### Installing from package repositories
 
-First, refer to the ["Verify Your Build Host"](../developer-guides/host-configuration/docs/1-Setup-your-build-host.html)
+First, refer to the ["Verify Your Build Host"](../../developer-guides/host-configuration/docs/1-Setup-your-build-host.html)
 section to check your host is supported and perform the associated necessary
 configuration steps. Then, you can use the commandlines below to get the
 `cloud-publication-binding` binding and all its dependencies. 
