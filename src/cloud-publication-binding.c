@@ -30,7 +30,7 @@
 
 #define PING_VERB_RESPONSE_SIZE 33
 
-#define REDIS_CLOUD_API "redis-from-cloud"
+#define REDIS_CLOUD_API "redis-cloud"
 #define REDIS_CLOUD_VERB_PING "ping"
 
 #define REDIS_LOCAL_API "redis"
