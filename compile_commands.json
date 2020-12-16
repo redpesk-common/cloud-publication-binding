@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/vrubiolo/Documents/Dev/repos/vrubiolo/rp-service-cloud/build/src",
+  "command": "/usr/bin/cc -DCONTROL_CONFIG_PATH=\\\"/home/vrubiolo/Documents/Dev/repos/vrubiolo/rp-service-cloud/conf.d/project/etc:/home/vrubiolo/Documents/Dev/repos/vrubiolo/rp-service-cloud/build/package/etc:/usr/redis-replication/etc\\\" -DSUSE_LUA_INCDIR -Dredis_replication_EXPORTS -I/usr/include/json-c -g -fPIC -Wall -Wextra -Wconversion -Wno-unused-parameter -Wno-sign-compare -Wno-sign-conversion -Werror=maybe-uninitialized -Werror=implicit-function-declaration -ffunction-sections -fdata-sections -fPIC -g -O0 -ggdb -I/usr/include/json-c -o CMakeFiles/redis-replication.dir/redis-replication-binding.c.o -c /home/vrubiolo/Documents/Dev/repos/vrubiolo/rp-service-cloud/src/redis-replication-binding.c",
+  "file": "/home/vrubiolo/Documents/Dev/repos/vrubiolo/rp-service-cloud/src/redis-replication-binding.c"
+}
+]

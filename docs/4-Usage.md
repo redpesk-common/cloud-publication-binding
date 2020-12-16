@@ -1,6 +1,5 @@
-# redpesk® demo-n2k plugin usage
+# redpesk® cloud publication binding usage
 
-XXX Describe
-  - starting up the cloud side
-  - controlling replication via start/stop
-  - using Gwen's UI
+The cloud publication binding closely follows the Redpesk Marine demo. Please see
+the [Repesk Marine demo](../../../redpesk-marine/demo-n2k/demo-n2k.html) for more
+information on how to operate it.

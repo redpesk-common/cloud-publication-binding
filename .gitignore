@@ -1,0 +1,9 @@
+*.swp
+*.kate-swp
+.vs
+*.sln
+*.vcxproj
+*.user
+build
+Build
+.cache/

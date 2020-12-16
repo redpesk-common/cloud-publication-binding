@@ -1,0 +1,17 @@
+{
+    "$schema": "http://iot.bzh/download/public/schema/json/ctl-schema.json",
+    "metadata": {
+      "uid": "cloud-publication-svc",
+      "version": "1.0",
+      "api": "cloud-pub",
+      "info": "Redpesk cloud publication service",
+      "require":["redis-cloud", "redis"]
+    },
+    "cloud-publication": [{
+      "publish_frequency_ms": "100",
+      "sensors" : [
+        {"class" : "WIRED_WIND_WS310"},
+        {"class" : "sensor2"}]
+    }
+    ]
+}
