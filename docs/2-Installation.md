@@ -92,7 +92,7 @@ sudo zypper in cloud-publication-binding
 
 ## C - From source
 
-We advise you use the [local builder](../getting_started/local_builder/docs/1_installation.html) for building the binding sources. 
+We advise you use the [local builder](../../getting_started/local_builder/docs/1_installation.html) for building the binding sources. 
 The local builder comes with everything setup to build Redpesk® projects.
 
 ### Dependencies
