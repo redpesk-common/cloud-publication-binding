@@ -163,7 +163,7 @@ static void stopPublicationCb (afb_req_t request) {
 
     TimerEvtStop(timerHandle);
     afb_api_set_userdata (api, NULL);
-    afb_req_success_f(request,json_object_new_string("Replication stopped"), NULL);
+    afb_req_success_f(request, NULL, "Replication stopped");
     return;
 }
 
@@ -287,7 +287,7 @@ static void startPublicationCb (afb_req_t request) {
     TimerEvtStart(api, timerHandle, redisReplTimerCb, timerHandle->context);
     afb_api_set_userdata(timerHandle->api, timerHandle);
 
-    afb_req_success_f(request, json_object_new_string("replication started successfully"), NULL);
+    afb_req_success_f(request, NULL, "replication started successfully");
     return;
 }
 
@@ -353,7 +353,7 @@ static void PingCb (afb_req_t request) {
 
     snprintf (response, sizeof(response), "Pong=%d", count++);
     AFB_API_NOTICE (request->api, "%s:ping count=%d query=%s", afb_api_name(request->api), count, json_object_get_string(queryJ));
-    afb_req_success_f(request, json_object_new_string(response), NULL);
+    afb_req_success_f(request, NULL, response);
 
     return;
 }
