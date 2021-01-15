@@ -255,7 +255,6 @@ static int redisReplTimerCb(TimerHandleT *timer) {
 static void startPublicationCb (afb_req_t request) {
     TimerHandleT *timerHandle;
     json_object * aggregArgsJ;
-    json_object * aggregArgsParamsJ;
     afb_api_t api = afb_req_get_api(request);
     int err;
     int disconnected = 0;
@@ -265,12 +264,6 @@ static void startPublicationCb (afb_req_t request) {
     // check state
     if (current_state.in_progress) {
         afb_req_success_f(request, NULL, "already started");
-        return;
-    }
-
-    err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
-    if (err){
-        afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation parameters argument packing failed!");
         return;
     }
 
