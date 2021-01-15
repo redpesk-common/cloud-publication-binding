@@ -260,7 +260,7 @@ static void startPublicationCb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    err = callVerbSync (request->api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
+    err = callVerbSync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
     if (err) {
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
         return;
