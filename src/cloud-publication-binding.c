@@ -22,7 +22,6 @@
 
 #include <ctl-config.h>
 #include <afb/afb-binding.h>
-#include <filescan-utils.h>
 #include <afb-timer.h>
 
 #define CP_TIMER_RUN_FOREVER -1
