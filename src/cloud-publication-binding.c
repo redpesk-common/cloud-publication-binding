@@ -364,17 +364,6 @@ static afb_verb_t CtrlApiVerbs[] = {
     { .verb = NULL} /* marker for end of the array */
 };
 
-static int CtrlLoadStaticVerbs (afb_api_t api, afb_verb_t *verbs, void *vcbdata) {
-    int errcount=0;
-
-    for (int idx=0; verbs[idx].verb; idx++) {
-        AFB_API_NOTICE(api, "Registering static verb '%s' info='%s'", CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info);
-        errcount+= afb_api_add_verb(api, CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info, CtrlApiVerbs[idx].callback, vcbdata, 0, 0,0);
-    }
-
-    return errcount;
-};
-
 static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
 
     static int callCnt = 0;
@@ -460,13 +449,12 @@ int afbBindingEntry(afb_api_t api) {
     }
 
     // add static controls verbs
-    err = CtrlLoadStaticVerbs (handle, CtrlApiVerbs, (void*) NULL);
-    if (err) {
+    err = afb_api_set_verbs_v3(handle, CtrlApiVerbs);
+    if (err < 0) {
         AFB_API_ERROR(api, "afbBindingEntry fail to register static API verbs");
         status = ERROR;
         goto _exit_afbBindingEntry;
     }
-
 
 _exit_afbBindingEntry:
     free(searchPath);
