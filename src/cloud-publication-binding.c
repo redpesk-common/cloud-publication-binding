@@ -141,6 +141,7 @@ static void stopPublicationCb (afb_req_t request) {
 
     if (timerHandle == NULL) {
         AFB_API_ERROR(api, "replication has not been started yet!");
+        afb_req_success_f(request, NULL, "Already stopped");
         return;
     }
 
