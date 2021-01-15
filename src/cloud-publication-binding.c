@@ -57,6 +57,15 @@ typedef struct {
     uint32_t retryCount;
 } cpTimer;
 
+struct replication_state
+{
+    bool in_progress;
+};
+
+struct replication_state current_state = {
+    .in_progress = false
+};
+
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
 int retryDelaysSz = (sizeof(retryDelays)/sizeof(retryDelays[0]));
 
@@ -138,6 +147,13 @@ static void stopPublicationCb (afb_req_t request) {
     TimerHandleT * timerHandle= afb_api_get_userdata(api);
 
     AFB_API_DEBUG(request->api, "%s called", __func__);
+
+    if (!current_state.in_progress) {
+        AFB_API_ERROR(api, "replication has not been started yet!");
+        afb_req_success_f(request, NULL, "Already stopped");
+        return;
+    }
+    current_state.in_progress = false;
 
     if (timerHandle == NULL) {
         AFB_API_ERROR(api, "replication has not been started yet!");
@@ -246,6 +262,12 @@ static void startPublicationCb (afb_req_t request) {
 
     assert (api);
 
+    // check state
+    if (current_state.in_progress) {
+        afb_req_success_f(request, NULL, "already started");
+        return;
+    }
+
     err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
     if (err){
         afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation parameters argument packing failed!");
@@ -266,12 +288,13 @@ static void startPublicationCb (afb_req_t request) {
         return;
     }
 
+    current_state.in_progress = true;
     timerHandle = createCpTimer(CP_TIMER_MAIN, 0, api);
 
     TimerEvtStart(api, timerHandle, redisReplTimerCb, timerHandle->context);
     afb_api_set_userdata(timerHandle->api, timerHandle);
 
-    afb_req_success_f(request,json_object_new_string("replication started successfully"), NULL);
+    afb_req_success_f(request, json_object_new_string("replication started successfully"), NULL);
     return;
 }
 
