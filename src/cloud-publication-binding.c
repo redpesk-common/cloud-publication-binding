@@ -54,7 +54,8 @@ struct replication_state
 
 struct replication_state current_state = {
     .in_progress = false,
-    .retry_count = 0
+    .retry_count = 0,
+    .api = 0
 };
 
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
@@ -98,7 +99,7 @@ static void stopPublicationCb (afb_req_t request) {
     return;
 }
 
-void push_data(afb_api_t api, struct json_object *mRangeResultJ) {
+void push_data(struct json_object *mRangeResultJ) {
     int err;
     int delay;
     int disconnected = 0;
@@ -109,10 +110,10 @@ void push_data(afb_api_t api, struct json_object *mRangeResultJ) {
     }
 
     // json_objet_get() necessary to increment refcount of object
-    err = callVerbSync (api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ),
+    err = callVerbSync (current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ),
                         &disconnected);
     if (err) {
-        AFB_API_ERROR(api, "failure to call ts_minsert() to replicate data!");
+        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to replicate data!");
         stop_replication();
         return;
     }
@@ -125,7 +126,7 @@ void push_data(afb_api_t api, struct json_object *mRangeResultJ) {
         current_state.retry_count += current_state.retry_count < 
                         ((sizeof retryDelays / sizeof *retryDelays) - 1);
 
-        AFB_API_NOTICE(api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
+        AFB_API_NOTICE(current_state.api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
     } else {
         // we are connected: this could be normal execution flow or a reconnection
         // if this is a reconnection (we were using a retry timer), we switch back
@@ -134,9 +135,9 @@ void push_data(afb_api_t api, struct json_object *mRangeResultJ) {
         delay = CP_TIMER_MAIN_DELAY;
     }
 
-    err = afb_api_queue_job(api, replicate_job, 0, 0, -delay);
+    err = afb_api_queue_job(current_state.api, replicate_job, 0, 0, -delay);
     if (err < 0) {
-        AFB_API_ERROR(api, "failure to re-queue replication");
+        AFB_API_ERROR(current_state.api, "failure to re-queue replication");
         stop_replication();
     }
 }
@@ -157,26 +158,25 @@ void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char
 
     //AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
 
-    push_data(api, mRangeResultJ);
+    push_data(mRangeResultJ);
 }
 
 static void replicate_job(int signum, void *arg) {
     int err;
     static int callCnt = 0;
     json_object * mrangeArgsJ;
-    afb_api_t api = current_state.api;
 
     if (signum) {
-        AFB_API_ERROR(api, "signal %s catched in replicate job", strsignal(signum));
+        AFB_API_ERROR(current_state.api, "signal %s catched in replicate job", strsignal(signum));
         stop_replication();
     }
     else {
-        AFB_API_DEBUG(api, "replicate_job iter %d", ++callCnt);
+        AFB_API_DEBUG(current_state.api, "replicate_job iter %d", ++callCnt);
         err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", SENSOR_CLASS, "fromts", "-", "tots", "+");
         if (!err)
-            callVerbAsync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, tsMrangeCallCb, NULL);
+            callVerbAsync (current_state.api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, tsMrangeCallCb, NULL);
 	else {
-            AFB_API_ERROR(api, "ts_mrange() argument packing failed!");
+            AFB_API_ERROR(current_state.api, "ts_mrange() argument packing failed!");
             stop_replication();
             return;
         }
@@ -196,9 +196,9 @@ static void startPublicationCb (afb_req_t request) {
         afb_req_success_f(request, NULL, "already started");
         return;
     }
+    current_state.api = api;
     current_state.in_progress = true;
     current_state.retry_count = 0;
-    current_state.api = api;
 
     err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", SENSOR_CLASS_ID, "class", SENSOR_CLASS,
                              "aggregation", "type", "avg", "bucket", 500);
