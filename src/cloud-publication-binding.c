@@ -99,24 +99,10 @@ static void stopPublicationCb (afb_req_t request) {
     return;
 }
 
-void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
-                    const char * info, afb_api_t api) {
+void push_data(afb_api_t api, struct json_object *mRangeResultJ) {
     int err;
     int delay;
     int disconnected = 0;
-
-    AFB_API_DEBUG(api, "%s: called, retry count: %d, in-progress %d", __func__, 
-                            current_state.retry_count, (int)current_state.in_progress);
-
-    // check errors
-    if (error){
-        AFB_API_ERROR(api, "failure to retrieve database records via ts_mrange(): %s [%s]!",
-                      error, info == NULL ? "[no info]": info);
-        stop_replication();
-        return;
-    }
-
-    //AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
 
     // nothing if stopped
     if (!current_state.in_progress) {
@@ -154,6 +140,25 @@ void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char
         AFB_API_ERROR(api, "failure to re-queue replication");
         stop_replication();
     }
+}
+
+void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
+                    const char * info, afb_api_t api) {
+
+    AFB_API_DEBUG(api, "%s: called, retry count: %d, in-progress %d", __func__, 
+                            current_state.retry_count, (int)current_state.in_progress);
+
+    // check errors
+    if (error){
+        AFB_API_ERROR(api, "failure to retrieve database records via ts_mrange(): %s [%s]!",
+                      error, info == NULL ? "[no info]": info);
+        stop_replication();
+        return;
+    }
+
+    //AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
+
+    push_data(api, mRangeResultJ);
 }
 
 static void replicate_job(int signum, void *arg) {
