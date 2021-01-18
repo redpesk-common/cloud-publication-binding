@@ -50,12 +50,14 @@ struct replication_state
     bool in_progress;
     int retry_count;
     afb_api_t api;
+    json_object *obj;
 };
 
 struct replication_state current_state = {
     .in_progress = false,
     .retry_count = 0,
-    .api = 0
+    .api = 0,
+    .obj = 0
 };
 
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
@@ -70,6 +72,7 @@ static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * v
                           *object, const char *error, const char * info,
                           afb_api_t api), void *closure);
 static void replicate_job(int signum, void *arg);
+static void repush_job(int signum, void *arg);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
@@ -82,6 +85,8 @@ static CtlSectionT ctrlSections[] = {
 static void stop_replication() {
     if (current_state.in_progress) {
         current_state.in_progress = false;
+	json_object_put(current_state.obj);
+	current_state.obj = NULL;
     }
 }
 
@@ -104,6 +109,7 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
 
     int err;
     int delay;
+    void (*job)(int,void*);
 
     // nothing if stopped
     if (!current_state.in_progress) {
@@ -115,13 +121,17 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         // we are connected: this could be normal execution flow or a reconnection
         // if this is a reconnection (we were using a retry timer), we switch back
         // to the main timer, otherwise we do nothing
-        current_state.retry_count = 0;
+	json_object_put(current_state.obj);
+	current_state.obj = NULL;
+	job = replicate_job;
         delay = CP_TIMER_MAIN_DELAY;
+        current_state.retry_count = 0;
     }
     else if (strcmp(error, "disconnected") == 0) {
         // the cloud side is disconnected: stop the current timer and create a
         // new one, potentially with an updated delay if there was already a
         // previous disconnection
+	job = repush_job;
         delay = retryDelays[current_state.retry_count];
         current_state.retry_count += current_state.retry_count < 
                         ((sizeof retryDelays / sizeof *retryDelays) - 1);
@@ -136,20 +146,21 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
     }
 
     // queue replication job
-    err = afb_api_queue_job(current_state.api, replicate_job, 0, 0, -delay);
+    err = afb_api_queue_job(current_state.api, job, 0, 0, -delay);
     if (err < 0) {
         AFB_API_ERROR(current_state.api, "failure to queue replication");
         stop_replication();
     }
 }
 
-void push_data(struct json_object *mRangeResultJ) {
+void push_data() {
     // nothing if stopped
     if (!current_state.in_progress) {
         return;
     }
 
-    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ), push_data_reply_cb, 0);
+    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT,
+                         json_object_get(current_state.obj), push_data_reply_cb, 0);
 }
 
 void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
@@ -166,9 +177,27 @@ void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char
         return;
     }
 
+    // nothing if stopped
+    if (!current_state.in_progress) {
+        return;
+    }
+
     //AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
 
-    push_data(mRangeResultJ);
+    current_state.obj = json_object_get(mRangeResultJ);
+    push_data();
+}
+
+static void repush_job(int signum, void *arg) {
+    static int callCnt = 0;
+    if (signum) {
+        AFB_API_ERROR(current_state.api, "signal %s catched in repush job", strsignal(signum));
+        stop_replication();
+    }
+    else {
+        AFB_API_DEBUG(current_state.api, "repush_job iter %d", ++callCnt);
+        push_data();
+    }
 }
 
 static void replicate_job(int signum, void *arg) {
