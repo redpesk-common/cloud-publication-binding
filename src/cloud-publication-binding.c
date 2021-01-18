@@ -85,12 +85,11 @@ static void stop_replication() {
 }
 
 static void stopPublicationCb (afb_req_t request) {
-    afb_api_t api = afb_req_get_api(request);
 
-    AFB_API_DEBUG(request->api, "%s called", __func__);
+    AFB_REQ_DEBUG(request, "%s called", __func__);
 
     if (!current_state.in_progress) {
-        AFB_API_ERROR(api, "replication has not been started yet!");
+        AFB_REQ_ERROR(request, "replication has not been started yet!");
         afb_req_success_f(request, NULL, "Already stopped");
         return;
     }
