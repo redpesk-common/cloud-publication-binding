@@ -99,26 +99,26 @@ static void stopPublicationCb (afb_req_t request) {
     return;
 }
 
-void push_data(struct json_object *mRangeResultJ) {
+void push_data_reply_cb(void *closure, struct json_object *mResultJ,
+                    const char *error, const char * info, afb_api_t api) {
+
     int err;
     int delay;
-    int disconnected = 0;
 
     // nothing if stopped
     if (!current_state.in_progress) {
         return;
     }
 
-    // json_objet_get() necessary to increment refcount of object
-    err = callVerbSync (current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ),
-                        &disconnected);
-    if (err) {
-        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to replicate data!");
-        stop_replication();
-        return;
+    // check status
+    if (error == NULL) {
+        // we are connected: this could be normal execution flow or a reconnection
+        // if this is a reconnection (we were using a retry timer), we switch back
+        // to the main timer, otherwise we do nothing
+        current_state.retry_count = 0;
+        delay = CP_TIMER_MAIN_DELAY;
     }
-
-    if (disconnected) {
+    else if (strcmp(error, "disconnected") == 0) {
         // the cloud side is disconnected: stop the current timer and create a
         // new one, potentially with an updated delay if there was already a
         // previous disconnection
@@ -127,19 +127,29 @@ void push_data(struct json_object *mRangeResultJ) {
                         ((sizeof retryDelays / sizeof *retryDelays) - 1);
 
         AFB_API_NOTICE(current_state.api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
-    } else {
-        // we are connected: this could be normal execution flow or a reconnection
-        // if this is a reconnection (we were using a retry timer), we switch back
-        // to the main timer, otherwise we do nothing
-        current_state.retry_count = 0;
-        delay = CP_TIMER_MAIN_DELAY;
+    }
+    else {
+	// the error is of an other kind unexpected
+        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to replicate data!");
+        stop_replication();
+        return;
     }
 
+    // queue replication job
     err = afb_api_queue_job(current_state.api, replicate_job, 0, 0, -delay);
     if (err < 0) {
-        AFB_API_ERROR(current_state.api, "failure to re-queue replication");
+        AFB_API_ERROR(current_state.api, "failure to queue replication");
         stop_replication();
     }
+}
+
+void push_data(struct json_object *mRangeResultJ) {
+    // nothing if stopped
+    if (!current_state.in_progress) {
+        return;
+    }
+
+    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ), push_data_reply_cb, 0);
 }
 
 void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
