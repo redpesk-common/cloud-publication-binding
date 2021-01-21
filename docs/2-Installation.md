@@ -18,7 +18,7 @@ dnf install cloud-publication-binding
 
 ### Installing from package repositories
 
-First, refer to the ["Verify Your Build Host"](../../developer-guides/host-configuration/docs/1-Setup-your-build-host.html)
+First, refer to the ["Verify Your Build Host"]({% chapter_link host-configuration-doc.setup-your-build-host %})
 section to check your host is supported and perform the associated necessary
 configuration steps. Then, you can use the commandlines below to get the
 `cloud-publication-binding` binding and all its dependencies. 
@@ -92,7 +92,7 @@ sudo zypper in cloud-publication-binding
 
 ## C - From source
 
-We advise you use the [local builder](../../getting_started/local_builder/docs/1_installation.html) for building the binding sources. 
+We advise you use the [local builder]({% chapter_link local-builder-doc.installation %}) for building the binding sources. 
 The local builder comes with everything setup to build Redpesk® projects.
 
 ### Dependencies
