@@ -109,12 +109,12 @@ The local builder comes with everything setup to build Redpesk® projects.
 
 Fedora/OpenSUSE/Redpesk:
 ```bash
-sudo dnf install gcc make cmake afb-cmake-modules json-c-devel afb-binding-devel libmicrohttpd afb-libhelpers-devel afb-libcontroller
+sudo dnf install gcc make cmake afb-cmake-modules json-c-devel afb-binding-devel libmicrohttpd afb-libhelpers-devel afb-libcontroller lua-devel
 ```
 
 Ubuntu:
 ```bash
-sudo apt install gcc make cmake afb-cmake-modules-bin libsystemd-dev libjson-c-dev afb-binding-dev libmicrohttpd12 afb-libhelpers-dev afb-libcontroller
+sudo apt install gcc make cmake afb-cmake-modules-bin libsystemd-dev libjson-c-dev afb-binding-dev libmicrohttpd12 afb-libhelpers-dev afb-libcontroller liblua5.3-dev
 ```
 
 ### Build & Install
