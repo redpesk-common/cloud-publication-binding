@@ -22,7 +22,6 @@
 
 #include <ctl-config.h>
 #include <afb/afb-binding.h>
-#include <filescan-utils.h>
 #include <afb-timer.h>
 
 #define CP_TIMER_RUN_FOREVER -1
@@ -43,239 +42,231 @@
 
 #define TIMER_RETRY_MAX_DELAY 10000
 
-#define TIMER_GET_TYPE(timer) (((cpTimer *)timer->context)->type)
-
 #define SENSOR_CLASS "WIRED_WIND_WS310"
 #define SENSOR_CLASS_ID SENSOR_CLASS "_ID"
 
-typedef enum {
-    CP_TIMER_MAIN,
-    CP_TIMER_RETRY
-} cpTimerType;
+struct publication_state
+{
+    bool in_progress;
+    int retry_count;
+    afb_api_t api;
+    json_object *obj;
+};
 
-typedef struct {
-    cpTimerType type;
-    uint32_t retryCount;
-} cpTimer;
+struct publication_state current_state = {
+    .in_progress = false,
+    .retry_count = 0,
+    .api = 0,
+    .obj = 0
+};
 
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
 int retryDelaysSz = (sizeof(retryDelays)/sizeof(retryDelays[0]));
 
-static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static int callVerbSync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
+static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
                          json_object * argsJ, int * disconnected);
-static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ, void
                           (*callback)( void *closure, struct json_object
                           *object, const char *error, const char * info,
                           afb_api_t api), void *closure);
-static int redisReplTimerCb(TimerHandleT *timer);
-static TimerHandleT * createCpTimer (cpTimerType type, int retryCnt, afb_api_t api);
-static int getTimerDelay (cpTimerType type, int currentCnt);
-static char * timerTypeToStr (cpTimerType type);
+static void publish_job(int signum, void *arg);
+static void repush_job(int signum, void *arg);
 
 // Config Section definition (note: controls section index should match handle
 // retrieval in HalConfigExec)
 static CtlSectionT ctrlSections[] = {
     { .key = "onload", .loadCB = OnloadConfig },
-    { .key = "redis-cloud", .loadCB = cloudConfig },
+    { .key = "redis-cloud", .loadCB = cloud_config },
     { .key = NULL }
 };
 
-
-static TimerHandleT * createCpTimer (cpTimerType type, int retryCnt, afb_api_t api) 
-    {
-    TimerHandleT *timer;
-
-    timer = calloc(1, sizeof (TimerHandleT) + sizeof(cpTimer));
-
-    if (type == CP_TIMER_RETRY) {
-        timer->count = 1;
-        timer->uid = "Cloud publication retry timer";
-    } else if (type == CP_TIMER_MAIN) {
-        timer->count = CP_TIMER_RUN_FOREVER;
-        timer->uid = "Cloud publication main timer";
-    } else {
-        assert (1);
-    }
-    timer->delay = getTimerDelay(type, retryCnt);
-    timer->context = timer + 1; // we store the cpTimer just after
-    timer->evtSource = NULL; // should always be NULL as per the docs
-    timer->api = api;
-
-    timer->callback = NULL;
-    timer->freeCB = NULL;
-
-    ((cpTimer *) timer->context)->type = type;
-    ((cpTimer *) timer->context)->retryCount = retryCnt;
-
-    AFB_API_DEBUG(api, "Created timer w/ delay %d and type %s", timer->delay,
-                  timerTypeToStr (type));
-    return timer;
-    }
-
-static char * timerTypeToStr (cpTimerType type) {
-    assert (type == CP_TIMER_RETRY || type == CP_TIMER_MAIN);
-    return type == CP_TIMER_RETRY ? "retry" : "main";
-}
-
-static int getTimerDelay (cpTimerType type, int currentCnt) {
-    assert (type == CP_TIMER_RETRY || type == CP_TIMER_MAIN);
-
-    // retry timer counts always start at 1
-    if (type == CP_TIMER_RETRY) {
-        if (currentCnt-1 >= retryDelaysSz) {
-            return TIMER_RETRY_MAX_DELAY;
-        } else {
-            return retryDelays[currentCnt-1];
-        }
-    } else {
-        return CP_TIMER_MAIN_DELAY;
+static void stop_publication() {
+    if (current_state.in_progress) {
+        current_state.in_progress = false;
+	json_object_put(current_state.obj);
+	current_state.obj = NULL;
     }
 }
 
-static void stopPublicationCb (afb_req_t request) {
-    afb_api_t api = afb_req_get_api(request);
-    TimerHandleT * timerHandle= afb_api_get_userdata(api);
+static void stop_publication_cb (afb_req_t request) {
 
-    AFB_API_DEBUG(request->api, "%s called", __func__);
+    AFB_REQ_DEBUG(request, "%s called", __func__);
 
-    if (timerHandle == NULL) {
-        AFB_API_ERROR(api, "replication has not been started yet!");
+    if (!current_state.in_progress) {
+        AFB_REQ_ERROR(request, "replication has not been started yet!");
+        afb_req_success_f(request, NULL, "Already stopped");
         return;
     }
-
-    TimerEvtStop(timerHandle);
-    afb_api_set_userdata (api, NULL);
-    afb_req_success_f(request,json_object_new_string("Replication stopped"), NULL);
+    stop_publication();
+    afb_req_success_f(request, NULL, "Replication stopped");
     return;
 }
 
-void tsMrangeCallCb(void *closure, struct json_object *mRangeResultJ, const char *error, 
-                    const char * info, afb_api_t api) {
+void push_data_reply_cb(void *closure, struct json_object *mResultJ,
+                    const char *error, const char * info, afb_api_t api) {
+
     int err;
-    int disconnected = 0;
-    TimerHandleT * timerHandle= afb_api_get_userdata(api);
-    TimerHandleT * newTimer;
-    cpTimerType currentTimerType;
-    int currentTimerRetryCnt;
+    int delay;
+    void (*job)(int,void*);
 
-    AFB_API_DEBUG(api, "%s: called", __func__);
+    // nothing if stopped
+    if (!current_state.in_progress) {
+        return;
+    }
 
-    currentTimerType = ((cpTimer *) timerHandle->context)->type;
-    assert (currentTimerType == CP_TIMER_RETRY || currentTimerType == CP_TIMER_MAIN);
+    // check status
+    if (error == NULL) {
+        // we are connected: this could be normal execution flow or a reconnection
+        // In any case, we restart publication.
+        json_object_put(current_state.obj);
+        current_state.obj = NULL;
+        job = publish_job;
+        delay = CP_TIMER_MAIN_DELAY;
+        current_state.retry_count = 0;
+    }
+    else if (strcmp(error, "disconnected") == 0) {
+        // the cloud side is disconnected: stop the current timer and set the
+        // next job to be a retry, potentially with an updated delay if there was
+        // already a previous disconnection
+        job = repush_job;
+        delay = retryDelays[current_state.retry_count];
+        current_state.retry_count += current_state.retry_count < 
+                        ((sizeof retryDelays / sizeof *retryDelays) - 1);
 
-    currentTimerRetryCnt = ((cpTimer *) timerHandle->context)->retryCount;
+        AFB_API_NOTICE(current_state.api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
+    }
+    else {
+        // the error is of an other unexpected kind
+        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to publish data!");
+        stop_publication();
+        return;
+    }
 
-    AFB_API_DEBUG(api, "%s: %s timer type, %d retry count", __func__, 
-                 timerTypeToStr(currentTimerType), currentTimerRetryCnt);
+    // queue publication job
+    err = afb_api_queue_job(current_state.api, job, 0, 0, -delay);
+    if (err < 0) {
+        AFB_API_ERROR(current_state.api, "failure to queue publication job!");
+        stop_publication();
+    }
+}
 
+void push_data() {
+    // nothing if stopped
+    if (!current_state.in_progress) {
+        return;
+    }
+
+    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT,
+                         json_object_get(current_state.obj), push_data_reply_cb, 0);
+}
+
+void ts_mrange_call_cb(void *closure, struct json_object *mRangeResultJ, const char *error, 
+                    const char * info, afb_api_t api) {
+
+    AFB_API_DEBUG(api, "%s: called, retry count: %d, in-progress %d", __func__, 
+                            current_state.retry_count, (int)current_state.in_progress);
+
+    // check errors
     if (error){
         AFB_API_ERROR(api, "failure to retrieve database records via ts_mrange(): %s [%s]!",
                       error, info == NULL ? "[no info]": info);
+        stop_publication();
+        return;
+    }
+
+    // nothing if stopped
+    if (!current_state.in_progress) {
         return;
     }
 
     //AFB_API_DEBUG(api, "ts_mrange() returned %s", json_object_get_string(mRangeResultJ));
 
-    // json_objet_get() necessary to increment refcount of object
-    err = callVerbSync (api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT, json_object_get(mRangeResultJ),
-                        &disconnected);
-    if (err) {
-        AFB_API_ERROR(api, "failure to call ts_minsert() to replicate data!");
-        return;
+    current_state.obj = json_object_get(mRangeResultJ);
+    push_data();
+}
+
+static void repush_job(int signum, void *arg) {
+    static int callCnt = 0;
+    if (signum) {
+        AFB_API_ERROR(current_state.api, "signal %s caught in repush job", strsignal(signum));
+        stop_publication();
     }
-
-    if (disconnected) {
-        // the cloud side is disconnected: stop the current timer and create a
-        // new one, potentially with an updated delay if there was already a
-        // previous disconnection
-        TimerEvtStop(timerHandle); // this does not free the handle yet
-        afb_api_set_userdata (api, NULL);
-
-        newTimer = createCpTimer(CP_TIMER_RETRY, currentTimerRetryCnt+1, api);
-
-        AFB_API_NOTICE(api, "cloud side disconnected, retrying in %d seconds", newTimer->delay/1000);
-        TimerEvtStart(api, newTimer, redisReplTimerCb, newTimer->context);
-        afb_api_set_userdata(newTimer->api, newTimer);
-    } else {
-        // we are connected: this could be normal execution flow or a reconnection
-        // if this is a reconnection (we were using a retry timer), we switch back
-        // to the main timer, otherwise we do nothing
-
-        if (TIMER_GET_TYPE(timerHandle) == CP_TIMER_RETRY) {
-            TimerEvtStop(timerHandle); // this does not free the handle yet
-            afb_api_set_userdata (api, NULL);
-
-            AFB_API_NOTICE(api, "cloud side now reconnected, resuming publication");
-            newTimer = createCpTimer(CP_TIMER_MAIN, 0, api);
-
-            TimerEvtStart(api, newTimer, redisReplTimerCb, newTimer->context);
-            afb_api_set_userdata(newTimer->api, newTimer);
-        }
+    else {
+        AFB_API_DEBUG(current_state.api, "repush_job iter %d", ++callCnt);
+        push_data();
     }
-    }
+}
 
-static int redisReplTimerCb(TimerHandleT *timer) {
+static void publish_job(int signum, void *arg) {
     int err;
     static int callCnt = 0;
     json_object * mrangeArgsJ;
-    afb_api_t api = timer->api;
 
-    callCnt++;
-    AFB_API_DEBUG(api, "%s called %d times via %s timer (delay: %d)", __func__, callCnt,
-                  timerTypeToStr(TIMER_GET_TYPE(timer)), timer->delay);
-
-    err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", SENSOR_CLASS, "fromts", "-", "tots", "+");
-    if (err){
-        AFB_API_ERROR(api, "ts_mrange() argument packing failed!");
-        return 0;
+    if (signum) {
+        AFB_API_ERROR(current_state.api, "signal %s caught in publication job", strsignal(signum));
+        stop_publication();
     }
-
-    callVerbAsync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, tsMrangeCallCb, NULL);
-    return 1;
+    else {
+        AFB_API_DEBUG(current_state.api, "publish_job iter %d", ++callCnt);
+        err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", SENSOR_CLASS, "fromts", "-", "tots", "+");
+        if (!err) {
+            call_verb_async (current_state.api, REDIS_LOCAL_API,
+                             REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, ts_mrange_call_cb, NULL);
+        } else {
+            AFB_API_ERROR(current_state.api, "ts_mrange() argument packing failed!");
+            stop_publication();
+            return;
+        }
+    }
 }
 
-static void startPublicationCb (afb_req_t request) {
-    TimerHandleT *timerHandle;
+static void start_publication_cb (afb_req_t request) {
     json_object * aggregArgsJ;
-    json_object * aggregArgsParamsJ;
     afb_api_t api = afb_req_get_api(request);
     int err;
     int disconnected = 0;
 
     assert (api);
 
-    err = wrap_json_pack (&aggregArgsParamsJ, "{s:s, s:i}", "type", "avg", "bucket", 500);
-    if (err){
-        afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation parameters argument packing failed!");
+    // check state
+    if (current_state.in_progress) {
+        afb_req_success_f(request, NULL, "already started");
         return;
     }
+    current_state.api = api;
+    current_state.in_progress = true;
+    current_state.retry_count = 0;
 
     err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", SENSOR_CLASS_ID, "class", SENSOR_CLASS,
                              "aggregation", "type", "avg", "bucket", 500);
     if (err){
+        current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation argument packing failed!");
         return;
     }
 
     // Request resampling being done for all future records
-    err = callVerbSync (request->api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
+    err = call_verb_sync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
     if (err) {
+        current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
         return;
     }
 
-    timerHandle = createCpTimer(CP_TIMER_MAIN, 0, api);
+    err = afb_api_queue_job(api, publish_job, 0, 0, -CP_TIMER_MAIN_DELAY);
+    if (err < 0) {
+        current_state.in_progress = false;
+        afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
+        return;
+    }
 
-    TimerEvtStart(api, timerHandle, redisReplTimerCb, timerHandle->context);
-    afb_api_set_userdata(timerHandle->api, timerHandle);
-
-    afb_req_success_f(request,json_object_new_string("replication started successfully"), NULL);
+    afb_req_success_f(request, NULL, "replication started successfully");
     return;
 }
 
-static int callVerbSync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, int * disconnected) {
     int err;
     char *returnedError = NULL, *returnedInfo = NULL;
@@ -312,7 +303,7 @@ static int callVerbSync (afb_api_t api, const char * apiToCall, const char * ver
     return 0;
 }
 
-static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ,
                           void (*callback)(
                             void *closure,
@@ -330,19 +321,19 @@ static void callVerbAsync (afb_api_t api, const char * apiToCall, const char * v
     AFB_API_DEBUG(api, "%s: %s/%s async call performed", __func__, apiToCall, verbToCall);
 }
 
-static void PingCb (afb_req_t request) {
+static void ping_cb (afb_req_t request) {
     static int count=0;
     char response[PING_VERB_RESPONSE_SIZE];
     json_object *queryJ =  afb_req_json(request);
 
     snprintf (response, sizeof(response), "Pong=%d", count++);
     AFB_API_NOTICE (request->api, "%s:ping count=%d query=%s", afb_api_name(request->api), count, json_object_get_string(queryJ));
-    afb_req_success_f(request, json_object_new_string(response), NULL);
+    afb_req_success_f(request, NULL, response);
 
     return;
 }
 
-static void InfoCb (afb_req_t request) {
+static void info_cb (afb_req_t request) {
     json_object * infoArgsJ;
 	enum json_tokener_error jerr;
 
@@ -357,25 +348,14 @@ static void InfoCb (afb_req_t request) {
 // Static verb not depending on main json config file
 static afb_verb_t CtrlApiVerbs[] = {
     /* VERB'S NAME         FUNCTION TO CALL         SHORT DESCRIPTION */
-    { .verb = "ping",     .callback = PingCb    , .info = "Cloud publication ping test"},
-    { .verb = "info",     .callback = InfoCb, .info = "Cloud publication info request"},
-    { .verb = "start",     .callback = startPublicationCb     , .info = "Start cloud publication"},
-    { .verb = "stop",     .callback = stopPublicationCb     , .info = "Stop cloud publication"},
+    { .verb = "ping",     .callback = ping_cb    , .info = "Cloud publication ping test"},
+    { .verb = "info",     .callback = info_cb, .info = "Cloud publication info request"},
+    { .verb = "start",     .callback = start_publication_cb     , .info = "Start cloud publication"},
+    { .verb = "stop",     .callback = stop_publication_cb     , .info = "Stop cloud publication"},
     { .verb = NULL} /* marker for end of the array */
 };
 
-static int CtrlLoadStaticVerbs (afb_api_t api, afb_verb_t *verbs, void *vcbdata) {
-    int errcount=0;
-
-    for (int idx=0; verbs[idx].verb; idx++) {
-        AFB_API_NOTICE(api, "Registering static verb '%s' info='%s'", CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info);
-        errcount+= afb_api_add_verb(api, CtrlApiVerbs[idx].verb, CtrlApiVerbs[idx].info, CtrlApiVerbs[idx].callback, vcbdata, 0, 0,0);
-    }
-
-    return errcount;
-};
-
-static int cloudConfig(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
+static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
 
     static int callCnt = 0;
 
@@ -460,13 +440,12 @@ int afbBindingEntry(afb_api_t api) {
     }
 
     // add static controls verbs
-    err = CtrlLoadStaticVerbs (handle, CtrlApiVerbs, (void*) NULL);
-    if (err) {
+    err = afb_api_set_verbs_v3(handle, CtrlApiVerbs);
+    if (err < 0) {
         AFB_API_ERROR(api, "afbBindingEntry fail to register static API verbs");
         status = ERROR;
         goto _exit_afbBindingEntry;
     }
-
 
 _exit_afbBindingEntry:
     free(searchPath);

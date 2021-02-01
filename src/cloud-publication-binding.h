@@ -27,7 +27,6 @@
 
 #define  AFB_BINDING_VERSION 3
 #include <afb/afb-binding.h>
-#include <afb-timer.h>
 #include <wrap-json.h>
 
 #ifndef ERROR
