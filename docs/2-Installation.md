@@ -146,22 +146,12 @@ Follow these steps to setup LXD and configure the cloud binding container:
 ```bash
 git clone https://github.com/redpesk-devtools/redpesk-localbuilder-installer
 cd redpesk-localbuilder-installer
-sed -i -e 's#redpesk-builder/33#cloud-publication-container/33#' install.sh
-./install.sh cloud-publication-container
+./install.sh create -c redpesk-cloud-publication -t cloud-publication
 ```
 
-This will download LXD for your OS, pull the `cloud-publication-container`
-container and start it.
+This will download LXD for your OS, pull the cloud publication binding host 
+side container and start it.
 
-### Container proxy configuration
-
-Once the container is started, the internal Redis binder port needs to be made
-available for the target to connect to. This is done via an LXD proxy device:
-
-```bash
-lxc config device add cloud-publication-container redis-cloud proxy listen=tcp:0.0.0.0:21212 connect=tcp:127.0.0.1:1212
-lxc restart cloud-publication-container
-```
 ### Setup and check target/container connectivity
 
 At this point, the container is running on your host machine, and the Redis
