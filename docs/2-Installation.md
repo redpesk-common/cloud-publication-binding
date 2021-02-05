@@ -149,8 +149,6 @@ cd redpesk-localbuilder-installer
 ./install-redpesk-localbuilder.sh create -c redpesk-cloud-publication -t cloud-publication
 ```
 
-You will been asked to enter the redpesk Image Store password that is: iotbzh.
-
 This will download LXD for your OS, pull the cloud publication binding host 
 side container and start it.
 
