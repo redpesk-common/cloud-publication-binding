@@ -69,11 +69,9 @@ static void call_verb_async (afb_api_t api, const char * apiToCall, const char *
 static void publish_job(int signum, void *arg);
 static void repush_job(int signum, void *arg);
 
-// Config Section definition (note: controls section index should match handle
-// retrieval in HalConfigExec)
-static CtlSectionT ctrlSections[] = {
-    { .key = "onload", .loadCB = OnloadConfig },
-    { .key = "redis-cloud", .loadCB = cloud_config },
+// Static configuration section definition for the cloud binding
+static CtlSectionT ctrlStaticSectionsCloud[] = {
+    { .key = "cloud-pub", .loadCB = cloud_config },
     { .key = NULL }
 };
 
