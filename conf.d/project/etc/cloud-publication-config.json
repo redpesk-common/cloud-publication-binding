@@ -7,11 +7,10 @@
       "info": "Redpesk cloud publication service",
       "require":["redis-cloud", "redis"]
     },
-    "cloud-publication": [{
-      "publish_frequency_ms": "100",
+    "cloud-pub": {
+      "publish_frequency_ms": 100,
       "sensors" : [
-        {"class" : "WIRED_WIND_WS310"},
-        {"class" : "sensor2"}]
+        {"class" : "WIRED_WIND_WS310"}
+      ]
     }
-    ]
 }
