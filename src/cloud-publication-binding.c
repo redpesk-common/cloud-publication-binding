@@ -369,7 +369,7 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ)
 
 }
 
-static int CtrlInitOneApi(afb_api_t api) {
+static int CtrlInitOneApiCloud(afb_api_t api) {
     int err = 0;
 
     // retrieve section config from api handle
@@ -386,18 +386,18 @@ static int CtrlInitOneApi(afb_api_t api) {
     return err;
 }
 
-static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
+static int CtrlLoadOneApiCloud(void* vcbdata, afb_api_t api) {
     CtlConfigT* ctrlConfig = (CtlConfigT*)vcbdata;
 
     // save closure as api's data context
     // note: this is mandatory for the controller to work
     afb_api_set_userdata(api, ctrlConfig);
 
-    // load section for corresponding API
-    int error = CtlLoadSections(api, ctrlConfig, ctrlSections);
+    // load section for corresponding API. This makes use of the ctrlSectionsCloud array defined above.
+    int error = CtlLoadSections(api, ctrlConfig, ctrlStaticSectionsCloud);
 
     // init and seal API function
-    afb_api_on_init(api, CtrlInitOneApi);
+    afb_api_on_init(api, CtrlInitOneApiCloud);
 
     return error;    
 }
@@ -432,7 +432,7 @@ int afbBindingEntry(afb_api_t api) {
 
     AFB_API_NOTICE(api, "Controller API='%s' info='%s'", ctrlConfig->api, ctrlConfig->info);
 
-    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApi, ctrlConfig);
+    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApiCloud, ctrlConfig);
     if (!handle){
         AFB_API_ERROR(api, "afbBindingEntry failed to create API");
         status = ERROR;
