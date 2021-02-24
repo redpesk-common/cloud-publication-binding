@@ -31,10 +31,6 @@
 
 #define PING_VERB_RESPONSE_SIZE 33
 
-#define REDIS_CLOUD_API "redis-cloud"
-
-#define REDIS_LOCAL_API "redis"
-
 #define API_REPLY_FAILURE "failed"
 
 #define TIMER_RETRY_MAX_DELAY 10000
@@ -166,7 +162,7 @@ void push_data() {
         return;
     }
 
-    afb_api_call(current_state.api, REDIS_CLOUD_API, "ts_minsert",
+    afb_api_call(current_state.api, binding_params.redis_cloud_api, "ts_minsert",
                          json_object_get(current_state.obj), push_data_reply_cb, 0);
 }
 
@@ -222,7 +218,7 @@ static void publish_job(int signum, void *arg) {
                               binding_params.cloud_sensors[0].class, 
                               "fromts", "-", "tots", "+");
         if (!err) {
-            call_verb_async (current_state.api, REDIS_LOCAL_API,
+            call_verb_async (current_state.api, binding_params.redis_local_api,
                              "ts_mrange", mrangeArgsJ, ts_mrange_call_cb, NULL);
         } else {
             AFB_API_ERROR(current_state.api, "ts_mrange() argument packing failed!");
@@ -259,7 +255,8 @@ static void start_publication_cb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    err = call_verb_sync (api, REDIS_LOCAL_API, "ts_maggregate", aggregArgsJ, &disconnected);
+    err = call_verb_sync (api, binding_params.redis_local_api, "ts_maggregate", aggregArgsJ, 
+                          &disconnected);
     if (err) {
         current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
@@ -479,6 +476,66 @@ static int CtrlLoadOneApiCloud(void* vcbdata, afb_api_t api) {
     return error;    
 }
 
+/**
+ * @brief Process the 'required' API section of the binding
+ *
+ * @param api - the binding API
+ * @param requireJ - a pointer on JSON 'require' section object
+ * @return 0 on success
+ * @return -1 if there was any error in the parameter structure or a parsing error
+ */
+
+static int process_required_apis (afb_api_t api, json_object * requireJ) {
+    // Check required APIs
+    // By convention, the first entry is the cloud side, the second one is the local side
+
+    json_object * redis_cloud_api;
+    json_object * redis_local_api;
+
+    if (requireJ == NULL) {
+        AFB_API_ERROR(api, "could not find a 'require' entry in binding 'metadata' section!");
+        goto _error;
+    }
+
+    if (!json_object_is_type(requireJ, json_type_array)) {
+        AFB_API_ERROR(api, "Binding required APIs section must be an array! Found %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    if (json_object_array_length(requireJ) != 2) {
+        AFB_API_ERROR(api, "Binding required APIs section must have 2 entries! Found %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    redis_cloud_api = json_object_array_get_idx(requireJ,0);
+    redis_local_api = json_object_array_get_idx(requireJ,1);
+
+    if (redis_cloud_api == NULL || redis_local_api == NULL) {
+        AFB_API_ERROR(api, "Cannot retrieve binding required APIs from %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    binding_params.redis_local_api = json_object_get_string(redis_local_api);
+    binding_params.redis_cloud_api = json_object_get_string(redis_cloud_api);
+
+    if (binding_params.redis_cloud_api == NULL || \
+        binding_params.redis_local_api == NULL) {
+        AFB_API_ERROR(api, "Cannot process binding required APIs info from %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    AFB_API_DEBUG(api, "Redis cloud API name is '%s'", binding_params.redis_cloud_api);
+    AFB_API_DEBUG(api, "Redis local API name is '%s'", binding_params.redis_local_api);
+    return 0;
+
+_error:
+    return -1;
+}
+
 int afbBindingEntry(afb_api_t api) {
     int status = 0;
     int err = 0; char *searchPath, *envConfig; afb_api_t handle;
@@ -508,6 +565,11 @@ int afbBindingEntry(afb_api_t api) {
     }
 
     AFB_API_NOTICE(api, "Controller API='%s' info='%s'", ctrlConfig->api, ctrlConfig->info);
+
+    if (process_required_apis(api, ctrlConfig->requireJ) != 0) {
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+    }
 
     handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApiCloud, ctrlConfig);
     if (!handle){
