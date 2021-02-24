@@ -61,8 +61,14 @@ typedef struct cloudSensor {
   char class_id[SENSOR_CLASS_ID_MAX_LEN+1];
 } cloudSensorT;
 
-cloudSensorT * cloudSensors;
-int32_t publish_freq;
+typedef struct binding_parameters {
+    int publish_freq;
+    cloudSensorT * cloud_sensors;
+    const char * redis_local_api;
+    const char * redis_cloud_api;
+} binding_paramsT;
+
+binding_paramsT binding_params = {0};
 
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
 int retryDelaysSz = (sizeof(retryDelays)/sizeof(retryDelays[0]));
@@ -125,7 +131,7 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         json_object_put(current_state.obj);
         current_state.obj = NULL;
         job = publish_job;
-        delay = publish_freq;
+        delay = binding_params.publish_freq;
         current_state.retry_count = 0;
     }
     else if (strcmp(error, "disconnected") == 0) {
@@ -212,7 +218,8 @@ static void publish_job(int signum, void *arg) {
     }
     else {
         AFB_API_DEBUG(current_state.api, "publish_job iter %d", ++callCnt);
-        err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", cloudSensors[0].class, 
+        err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", 
+                              binding_params.cloud_sensors[0].class, 
                               "fromts", "-", "tots", "+");
         if (!err) {
             call_verb_async (current_state.api, REDIS_LOCAL_API,
@@ -242,8 +249,9 @@ static void start_publication_cb (afb_req_t request) {
     current_state.in_progress = true;
     current_state.retry_count = 0;
 
-    err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", cloudSensors[0].class_id, "class", 
-                          cloudSensors[0].class, "aggregation", "type", "avg", "bucket", 500);
+    err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", 
+                          binding_params.cloud_sensors[0].class_id, "class", 
+                          binding_params.cloud_sensors[0].class, "aggregation", "type", "avg", "bucket", 500);
     if (err){
         current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation argument packing failed!");
@@ -258,7 +266,7 @@ static void start_publication_cb (afb_req_t request) {
         return;
     }
 
-    err = afb_api_queue_job(api, publish_job, 0, 0, -publish_freq);
+    err = afb_api_queue_job(api, publish_job, 0, 0, -binding_params.publish_freq);
     if (err < 0) {
         current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
@@ -380,7 +388,8 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudS
 
     AFB_API_DEBUG (api, "%s: parsing cloud publication binding configuration", __func__);
 
-    err = wrap_json_unpack(cloudSectionJ, "{s:i, s:o}", "publish_frequency_ms", &publish_freq, "sensors", &sensorsJ);
+    err = wrap_json_unpack(cloudSectionJ, "{s:i, s:o}", "publish_frequency_ms", 
+                           &binding_params.publish_freq, "sensors", &sensorsJ);
     if (err) {
         AFB_API_ERROR(api, "Cannot parse JSON config at '%s'. Error is: %s", 
                       json_object_to_json_string(cloudSectionJ), wrap_json_get_error_string(err));
@@ -403,8 +412,8 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudS
                       (uint32_t) count, json_object_to_json_string(sensorsJ));
         goto error_exit;
     } else {
-        cloudSensors = calloc (count + 1, sizeof (cloudSensorT));
-        if (cloudSensors == NULL) {
+        binding_params.cloud_sensors = calloc (count + 1, sizeof (cloudSensorT));
+        if (binding_params.cloud_sensors == NULL) {
             AFB_API_ERROR(api, "Cannot allocate array for sensor configuration: %s", strerror (errno));
             goto error_exit;
             }
@@ -413,22 +422,23 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudS
     for (ix = 0 ; ix < count; ix++) {
         json_object * obj = json_object_array_get_idx(sensorsJ, ix);
 
-        err = wrap_json_unpack(obj, "{s:s !}", "class", &cloudSensors[ix].class);
+        err = wrap_json_unpack(obj, "{s:s !}", "class", &binding_params.cloud_sensors[ix].class);
         if (err) {
             AFB_API_ERROR(api, "Cannot parse sensor config at '%s'. Error is: %s", 
                         json_object_to_json_string(obj), wrap_json_get_error_string(err));
             goto error_exit;
         }
         // substract 3 bytes for ID suffix
-        snprintf(cloudSensors[ix].class_id, SENSOR_CLASS_ID_MAX_LEN-3, "ID-%s", 
-                 cloudSensors[ix].class); 
+        snprintf(binding_params.cloud_sensors[ix].class_id, SENSOR_CLASS_ID_MAX_LEN-3, "ID-%s", 
+                 binding_params.cloud_sensors[ix].class); 
     }
 
     // Visual inspection of parameters 
-    AFB_API_DEBUG(api, "Publishing data every %d ms", publish_freq);
-    for (ix = 0; cloudSensors[ix].class; ix++) {
+    AFB_API_DEBUG(api, "Publishing data every %d ms", binding_params.publish_freq);
+    for (ix = 0; binding_params.cloud_sensors[ix].class; ix++) {
         AFB_API_DEBUG(api, "Publishing data for sensor %d: %s - %s", ix, 
-                      cloudSensors[ix].class, cloudSensors[ix].class_id);
+                      binding_params.cloud_sensors[ix].class, 
+                      binding_params.cloud_sensors[ix].class_id);
     }
 
     return 0;
