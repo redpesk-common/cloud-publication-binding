@@ -146,7 +146,7 @@ Follow these steps to setup LXD and configure the cloud binding container:
 ```bash
 git clone https://github.com/redpesk-devtools/redpesk-localbuilder-installer
 cd redpesk-localbuilder-installer
-./install.sh create -c redpesk-cloud-publication -t cloud-publication
+./install-redpesk-localbuilder.sh create -c redpesk-cloud-publication -t cloud-publication
 ```
 
 This will download LXD for your OS, pull the cloud publication binding host 
