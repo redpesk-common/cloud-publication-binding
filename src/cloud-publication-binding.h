@@ -33,6 +33,6 @@
   #define ERROR -1
 #endif
 
-extern const char * infoVerb;
+extern const char * info_verbS;
 
 #endif /* _CLOUD_PUB_BINDING_ */

@@ -345,7 +345,7 @@ static void info_cb (afb_req_t request) {
     json_object * infoArgsJ;
 	enum json_tokener_error jerr;
 
-	infoArgsJ = json_tokener_parse_verbose(infoVerb, &jerr);
+	infoArgsJ = json_tokener_parse_verbose(info_verbS, &jerr);
 	if (infoArgsJ == NULL || jerr != json_tokener_success) {
         afb_req_fail_f(request,API_REPLY_FAILURE, "failure while packing info() verb arguments (error: %d)!", jerr);
         return;
