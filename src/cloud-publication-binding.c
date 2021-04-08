@@ -283,6 +283,7 @@ static void start_publication_cb (afb_req_t request) {
 static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, int * disconnected) {
     int err;
+    int status = 0;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
@@ -297,9 +298,8 @@ static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * v
                   returnedError ? returnedError : "none",
                   returnedInfo ? returnedInfo : "none",
                   verbToCall, apiToCall);
-        free(returnedError);
-        free(returnedInfo);
-        return -1;
+        status = -1;
+        goto exit;
     } 
 
     // no protocol error but a higher level one
@@ -309,12 +309,14 @@ static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * v
         if (strcmp (returnedError, "disconnected") == 0) {
             *disconnected = 1;
         }
-        free (returnedError);
     }
-    AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
-                  json_object_to_json_string(responseJ));
+    AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s [%s]", __func__, apiToCall, verbToCall,
+                  json_object_to_json_string(responseJ), returnedInfo ? returnedInfo : "-");
 
-    return 0;
+exit:
+    free(returnedInfo);
+    free(returnedError);
+    return status;
 }
 
 static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
