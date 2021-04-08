@@ -142,8 +142,9 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         AFB_API_NOTICE(current_state.api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
     }
     else {
-        // the error is of an other unexpected kind
-        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to publish data!");
+        // the error is of another unexpected kind
+        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to publish data [%s]!",
+                      error ? error : "-");
         stop_publication();
         return;
     }
