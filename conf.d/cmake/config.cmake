@@ -100,7 +100,7 @@ add_definitions(-DCONTROL_CONFIG_PATH="${CONTROL_CONFIG_PATH}")
 # DO NOT PUT ALL OPTION QUOTED AT ONCE , COMPILATION COULD FAILED !
 # ----------------------------------------------------------------------------
 set (C_COMPILE_OPTIONS "-Wno-shift-count-overflow" "-Wno-conversion")
-set(COMPILE_OPTIONS "-Wall" "-Wextra" "-Wconversion" "-Wno-unused-parameter" "-Wno-sign-compare" "-Wno-sign-conversion" "-Werror=maybe-uninitialized" "-Werror=implicit-function-declaration" "-ffunction-sections" "-fdata-sections" "-fPIC" CACHE STRING "Compilation flags")
+set(COMPILE_OPTIONS "-Wall" "-Wextra" "-Wconversion" "-Wno-unused-parameter" "-Wno-sign-compare" "-Wno-sign-conversion" "-Werror=maybe-uninitialized" "-Werror=implicit-function-declaration" "-ffunction-sections" "-fdata-sections" "-fPIC" "-Werror=format-security" CACHE STRING "Compilation flags")
 set(C_COMPILE_OPTIONS "" CACHE STRING "Compilation flags for C language.")
 #set(CXX_COMPILE_OPTIONS "" CACHE STRING "Compilation flags for C++ language.")
 #set(PROFILING_COMPILE_OPTIONS "-g" "-O0" "-pg" "-Wp,-U_FORTIFY_SOURCE" CACHE STRING "Compilation flags for PROFILING build type.")
