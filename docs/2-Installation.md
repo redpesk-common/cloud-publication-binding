@@ -29,15 +29,15 @@ distribution.
 **Important**: the host configuration steps above will have made you define the
 `DISTRO` variable used in the package repository URLs below.
 
-#### Ubuntu 20.04 and 18.04
+#### Ubuntu
 
 First, add the `redpesk-sdk` repository to the list of your packages repositories.
 
 ```bash
 # Add the repository in your list
-$ echo "deb https://download.redpesk.bzh/redpesk-devel/releases/33/sdk/$DISTRO/ ./" | sudo tee -a /etc/apt/sources.list
+$ echo "deb https://download.redpesk.bzh/redpesk-lts/{{ site.redpesk-os.latest }}/sdk/$DISTRO/ ./" | sudo tee -a /etc/apt/sources.list
 # Add the repository key
-$ curl -L https://download.redpesk.bzh/redpesk-devel/releases/33/sdk/$DISTRO/Release.key | sudo apt-key add -
+$ curl -L https://download.redpesk.bzh/redpesk-lts/{{ site.redpesk-os.latest }}/sdk/$DISTRO/Release.key | sudo apt-key add -
 ```
 
 Then, update the list of packages and simply install the `cloud-publication-binding` package.
@@ -49,7 +49,7 @@ $ sudo apt update
 $ sudo apt-get install cloud-publication-binding
 ```
 
-#### Fedora 32 and 33
+#### Fedora
 
 First, add the `redpesk-sdk` repository to the list of your packages repositories.
 
@@ -57,7 +57,7 @@ First, add the `redpesk-sdk` repository to the list of your packages repositorie
 $ cat << EOF > /etc/yum.repos.d/redpesk-sdk.repo
 [redpesk-sdk]
 name=redpesk-sdk
-baseurl=https://download.redpesk.bzh/redpesk-devel/releases/33/sdk/$DISTRO
+baseurl=https://download.redpesk.bzh/redpesk-lts/{{ site.redpesk-os.latest }}/sdk/$DISTRO
 enabled=1
 repo_gpgcheck=0
 type=rpm
@@ -72,14 +72,14 @@ Then, simply install the `cloud-publication-binding` package.
 dnf install cloud-publication-binding
 ```
 
-#### OpenSUSE Leap 15.1 and 15.2
+#### OpenSUSE Leap
 
 First, add the Redpesk "sdk" repository in the list of your packages repositories.
 
 ```bash
 $ OPENSUSE_VERSION=15.2 # Set the right OpenSUSE version
 # Add the repository in your list
-$ sudo zypper ar https://download.redpesk.bzh/redpesk-devel/releases/33/sdk/$DISTRO/ redpesk-sdk
+$ sudo zypper ar https://download.redpesk.bzh/redpesk-lts/{{ site.redpesk-os.latest }}/sdk/$DISTRO/ redpesk-sdk
 # Refresh your repositories
 $ sudo zypper ref
 ```
