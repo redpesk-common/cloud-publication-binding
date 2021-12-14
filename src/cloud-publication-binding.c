@@ -77,7 +77,7 @@ static void call_verb_async (afb_api_t api, const char * apiToCall, const char *
                           (*callback)( void *closure, struct json_object
                           *object, const char *error, const char * info,
                           afb_api_t api), void *closure);
-static void publish_job(int signum, void *arg);
+static void publication_job_entry(int signum, void *arg);
 static void repush_job(int signum, void *arg);
 
 // Static configuration section definition for the cloud binding
@@ -126,7 +126,7 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         // In any case, we restart publication.
         json_object_put(current_state.obj);
         current_state.obj = NULL;
-        job = publish_job;
+        job = publication_job_entry;
         delay = binding_params.publish_freq;
         current_state.retry_count = 0;
     }
@@ -204,7 +204,7 @@ static void repush_job(int signum, void *arg) {
     }
 }
 
-static void publish_job(int signum, void *arg) {
+static void publication_job_entry(int signum, void *arg) {
     int err;
     static int callCnt = 0;
     json_object * mrangeArgsJ;
@@ -214,7 +214,7 @@ static void publish_job(int signum, void *arg) {
         stop_publication();
     }
     else {
-        AFB_API_DEBUG(current_state.api, "publish_job iter %d", ++callCnt);
+        AFB_API_DEBUG(current_state.api, "publication_job_entry iter %d", ++callCnt);
         err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", 
                               binding_params.cloud_sensors[0].class, 
                               "fromts", "-", "tots", "+");
@@ -270,7 +270,7 @@ static void start_publication_cb (afb_req_t request) {
         }
     }
 
-    err = afb_api_queue_job(api, publish_job, 0, 0, -binding_params.publish_freq);
+    err = afb_api_queue_job(api, publication_job_entry, 0, 0, -binding_params.publish_freq);
     if (err < 0) {
         current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "queuing publication job failed!");
