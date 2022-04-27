@@ -30,14 +30,9 @@
 #define PING_VERB_RESPONSE_SIZE 33
 
 #define REDIS_CLOUD_API "redis-cloud"
-#define REDIS_CLOUD_VERB_PING "ping"
 
 #define REDIS_LOCAL_API "redis"
-#define REDIS_LOCAL_VERB_TS_MRANGE "ts_mrange"
-#define REDIS_LOCAL_VERB_TS_MAGGREGATE "ts_maggregate"
-#define REDIS_LOCAL_VERB_TS_MINSERT "ts_minsert"
 
-#define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
 
 #define TIMER_RETRY_MAX_DELAY 10000
@@ -158,7 +153,7 @@ void push_data() {
         return;
     }
 
-    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT,
+    afb_api_call(current_state.api, REDIS_CLOUD_API, "ts_minsert",
                          json_object_get(current_state.obj), push_data_reply_cb, 0);
 }
 
@@ -213,7 +208,7 @@ static void publish_job(int signum, void *arg) {
         err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", SENSOR_CLASS, "fromts", "-", "tots", "+");
         if (!err) {
             call_verb_async (current_state.api, REDIS_LOCAL_API,
-                             REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, ts_mrange_call_cb, NULL);
+                             "ts_mrange", mrangeArgsJ, ts_mrange_call_cb, NULL);
         } else {
             AFB_API_ERROR(current_state.api, "ts_mrange() argument packing failed!");
             stop_publication();
@@ -248,7 +243,7 @@ static void start_publication_cb (afb_req_t request) {
     }
 
     // Request resampling being done for all future records
-    err = call_verb_sync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
+    err = call_verb_sync (api, REDIS_LOCAL_API, "ts_maggregate", aggregArgsJ, &disconnected);
     if (err) {
         current_state.in_progress = false;
         afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");

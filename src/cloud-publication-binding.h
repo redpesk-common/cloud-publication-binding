@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2020 "IoT.bzh"
+* Copyright (C) 2020-2021 "IoT.bzh"
 * Author Vincent Rubiolo <vincent.rubiolo@iot.bzh>
 * based on original work from Fulup Ar Foll <fulup@iot.bzh>
 *
@@ -19,7 +19,7 @@
 #ifndef _CLOUD_PUB_BINDING_
 #define _CLOUD_PUB_BINDING_
 
-// usefull classical include
+// useful classical include
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
