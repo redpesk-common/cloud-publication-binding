@@ -8,6 +8,7 @@
       "require":["redis-cloud", "redis"]
     },
     "cloud-pub": {
+      "autostart":"no",
       "publish_frequency_ms": 100,
       "sensors" : [
         {"class" : "WIRED_WIND_WS310"},

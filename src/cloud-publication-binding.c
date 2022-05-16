@@ -60,6 +60,7 @@ typedef struct cloudSensor {
 typedef struct binding_parameters {
     int publish_freq;
     cloudSensorT * cloud_sensors;
+    const char * autostart;
     const char * redis_local_api;
     const char * redis_cloud_api;
 } binding_paramsT;
@@ -394,8 +395,9 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudS
 
     AFB_API_DEBUG (api, "%s: parsing cloud publication binding configuration", __func__);
 
-    err = wrap_json_unpack(cloudSectionJ, "{s:i, s:o}", "publish_frequency_ms", 
-                           &binding_params.publish_freq, "sensors", &sensorsJ);
+    err = wrap_json_unpack(cloudSectionJ, "{s:i, s:s, s:o}", "publish_frequency_ms", 
+                           &binding_params.publish_freq, "autostart", 
+                           &binding_params.autostart, "sensors", &sensorsJ);
     if (err) {
         AFB_API_ERROR(api, "Cannot parse JSON config at '%s'. Error is: %s", 
                       json_object_to_json_string(cloudSectionJ), wrap_json_get_error_string(err));
@@ -437,6 +439,8 @@ static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudS
 
     // Visual inspection of parameters 
     AFB_API_DEBUG(api, "Publishing data every %d ms", binding_params.publish_freq);
+    AFB_API_DEBUG(api, "Binding autostart is: %s", 
+                  strcmp(binding_params.autostart, "yes") ? "disabled": "enabled");
     for (ix = 0; binding_params.cloud_sensors[ix].class; ix++) {
         AFB_API_DEBUG(api, "Publishing data for sensor %d: %s - %s", ix, 
                       binding_params.cloud_sensors[ix].class, 
