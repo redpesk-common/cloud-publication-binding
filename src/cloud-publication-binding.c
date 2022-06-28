@@ -37,6 +37,9 @@
 
 #define SENSOR_CLASS_ID_MAX_LEN 51
 
+// redis binding currently crashes/abort on resampling
+#undef BINDING_HAS_RESAMPLING_SUPPORT
+
 struct publication_state
 {
     bool in_progress;
@@ -71,8 +74,7 @@ int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
 int retryDelaysSz = (sizeof(retryDelays)/sizeof(retryDelays[0]));
 
 static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                         json_object * argsJ, int * disconnected);
+
 static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ, void
                           (*callback)( void *closure, struct json_object
@@ -80,7 +82,12 @@ static void call_verb_async (afb_api_t api, const char * apiToCall, const char *
                           afb_api_t api), void *closure);
 static void publication_job_entry(int signum, void *arg);
 static void repush_job(int signum, void *arg);
+
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
 static int resample_sensor_values (afb_req_t request);
+static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                         json_object * argsJ, int * disconnected);
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
 
 // Static configuration section definition for the cloud binding
 static CtlSectionT ctrlStaticSectionsCloud[] = {
@@ -231,6 +238,38 @@ static void publication_job_entry(int signum, void *arg) {
     }
 }
 
+static void start_publication_cb (afb_req_t request) {
+    afb_api_t api = afb_req_get_api(request);
+    int err;
+
+    assert (api);
+
+    // check state
+    if (current_state.in_progress) {
+        afb_req_success_f(request, NULL, "already started");
+        return;
+    }
+    current_state.api = api;
+    current_state.in_progress = true;
+    current_state.retry_count = 0;
+
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
+    if (resample_sensor_values (request) != 0)
+        return;
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
+
+    err = afb_api_queue_job(api, publication_job_entry, 0, 0, -binding_params.publish_freq);
+    if (err < 0) {
+        current_state.in_progress = false;
+        afb_req_fail_f(request,API_REPLY_FAILURE, "queuing publication job failed!");
+        return;
+    }
+
+    afb_req_success_f(request, NULL, "replication successfully started");
+    return;
+}
+
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
 static int resample_sensor_values (afb_req_t request) {
     afb_api_t api = afb_req_get_api(request);
     int err, idx;
@@ -264,35 +303,6 @@ static int resample_sensor_values (afb_req_t request) {
     }
 
     return 0;
-}
-
-static void start_publication_cb (afb_req_t request) {
-    afb_api_t api = afb_req_get_api(request);
-    int err;
-
-    assert (api);
-
-    // check state
-    if (current_state.in_progress) {
-        afb_req_success_f(request, NULL, "already started");
-        return;
-    }
-    current_state.api = api;
-    current_state.in_progress = true;
-    current_state.retry_count = 0;
-
-    if (resample_sensor_values (request) != 0)
-      return;
-
-    err = afb_api_queue_job(api, publication_job_entry, 0, 0, -binding_params.publish_freq);
-    if (err < 0) {
-        current_state.in_progress = false;
-        afb_req_fail_f(request,API_REPLY_FAILURE, "queuing publication job failed!");
-        return;
-    }
-
-    afb_req_success_f(request, NULL, "replication successfully started");
-    return;
 }
 
 static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
@@ -336,6 +346,7 @@ exit:
     free(returnedError);
     return status;
 }
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
 
 static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ,
