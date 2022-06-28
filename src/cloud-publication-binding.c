@@ -306,10 +306,13 @@ static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * v
 
     // no protocol error but a higher level one
     if (returnedError) { 
-        AFB_API_DEBUG(api, "%s: %s/%s sync call returned OK but error detected: %s", __func__, apiToCall,
-                    verbToCall, returnedError);
+        AFB_API_DEBUG(api, "%s: %s/%s sync call returned OK but higher level error detected: %s", 
+                      __func__, apiToCall, verbToCall, returnedError);
         if (strcmp (returnedError, "disconnected") == 0) {
             *disconnected = 1;
+        } else {
+            // treat errors other than disconnections as real errors
+            status = -1;
         }
     }
     AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s [%s]", __func__, apiToCall, verbToCall,
