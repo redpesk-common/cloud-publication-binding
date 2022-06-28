@@ -11,17 +11,7 @@
       "autostart":"no",
       "publish_frequency_ms": 100,
       "sensors" : [
-        {"class" : "WIRED_WIND_WS310"},
-        {"class" : "WIRED_WIND_WS310-1"},
-        {"class" : "WIRED_WIND_WS310-2"},
-        {"class" : "WIRED_WIND_WS310-3"},
-        {"class" : "WIRED_WIND_WS310-4"},
-        {"class" : "WIRED_WIND_WS310-5"},
-        {"class" : "WIRED_WIND_WS310-6"},
-        {"class" : "WIRED_WIND_WS310-7"},
-        {"class" : "WIRED_WIND_WS310-8"},
-        {"class" : "WIRED_WIND_WS310-9"},
-        {"class" : "WIRED_WIND_WS310-10"}
+        {"class" : "SIEMENS_ET200SP"}
       ]
     }
 }
