@@ -80,6 +80,7 @@ static void call_verb_async (afb_api_t api, const char * apiToCall, const char *
                           afb_api_t api), void *closure);
 static void publication_job_entry(int signum, void *arg);
 static void repush_job(int signum, void *arg);
+static int resample_sensor_values (afb_req_t request);
 
 // Static configuration section definition for the cloud binding
 static CtlSectionT ctrlStaticSectionsCloud[] = {
@@ -230,11 +231,44 @@ static void publication_job_entry(int signum, void *arg) {
     }
 }
 
-static void start_publication_cb (afb_req_t request) {
-    json_object * aggregArgsJ;
+static int resample_sensor_values (afb_req_t request) {
     afb_api_t api = afb_req_get_api(request);
     int err, idx;
+    json_object * aggregArgsJ;
     int disconnected = 0;
+
+    assert (api);
+
+    // Loop over sensors and request resampling for each of them
+    for (idx = 0; binding_params.cloud_sensors[idx].class != NULL; idx ++) {
+        err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", 
+                            binding_params.cloud_sensors[idx].class_id, "class", 
+                            binding_params.cloud_sensors[idx].class, "aggregation", 
+                            "type", "avg", "bucket", 500);
+        if (err){
+            current_state.in_progress = false;
+            afb_req_fail_f(request, API_REPLY_FAILURE, 
+                           "aggregation argument packing failed [idx:%d]!", idx);
+            return -1; 
+        }
+
+        // Request resampling being done for all future records
+        err = call_verb_sync (api, binding_params.redis_local_api, "ts_maggregate", 
+                              aggregArgsJ, &disconnected);
+        if (err) {
+            current_state.in_progress = false;
+            afb_req_fail_f(request,API_REPLY_FAILURE, 
+                           "redis resampling request failed [idx:%d]!", idx);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static void start_publication_cb (afb_req_t request) {
+    afb_api_t api = afb_req_get_api(request);
+    int err;
 
     assert (api);
 
@@ -247,29 +281,8 @@ static void start_publication_cb (afb_req_t request) {
     current_state.in_progress = true;
     current_state.retry_count = 0;
 
-    // Loop over sensors and request resampling for each of them
-    for (idx = 0; binding_params.cloud_sensors[idx].class != NULL; idx ++) {
-        err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", 
-                            binding_params.cloud_sensors[idx].class_id, "class", 
-                            binding_params.cloud_sensors[idx].class, "aggregation", 
-                            "type", "avg", "bucket", 500);
-        if (err){
-            current_state.in_progress = false;
-            afb_req_fail_f(request, API_REPLY_FAILURE, 
-                           "aggregation argument packing failed [idx:%d]!", idx);
-            return;
-        }
-
-        // Request resampling being done for all future records
-        err = call_verb_sync (api, binding_params.redis_local_api, "ts_maggregate", 
-                              aggregArgsJ, &disconnected);
-        if (err) {
-            current_state.in_progress = false;
-            afb_req_fail_f(request,API_REPLY_FAILURE, 
-                           "redis resampling request failed [idx:%d]!", idx);
-            return;
-        }
-    }
+    if (resample_sensor_values (request) != 0)
+      return;
 
     err = afb_api_queue_job(api, publication_job_entry, 0, 0, -binding_params.publish_freq);
     if (err < 0) {
