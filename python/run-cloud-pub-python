@@ -1,0 +1,19 @@
+#!/bin/bash -x 
+
+REPOS_DIR="$HOME/Documents/Dev/repos"
+#PYTHON_DIR="$REPOS_DIR/iotbzh/afb-libpython"
+
+GDB_CMD="$PWD/gdb-init-cmds"
+
+if [[ "$1" == "debug" ]]; then
+    EXTRA="gdb -x $GDB_CMD --args "
+fi
+
+source $REPOS_DIR/vrubiolo/dev-env/redpesk-marine/from-src-host/bindings.env
+
+export PYTHONPATH=$PREFIX/afb-python-binder/lib
+#export LD_DEBUG=all
+
+# XXX: afbBindingLoad will crash at l.971 if the binder failed to start because of
+# a configuration error (unreachable rootdir)
+$EXTRA python3 subcall-api.py

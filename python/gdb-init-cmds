@@ -1,0 +1,5 @@
+# Early init commands are located in ~/.config/gdb/gdbearlyinit
+
+#break AfbApiImport
+break afb_api_ws_add_server
+run
