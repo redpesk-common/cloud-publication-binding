@@ -1,0 +1,48 @@
+{ 
+  "metadata": { 
+      "uid": "cloud-pub", 
+      "info": "Cloud publication binding: allows to publish target data to the cloud", 
+      "version": "1.0" 
+    }, 
+    "groups": [ 
+      { 
+        "uid": "main", 
+        "info": "General", 
+        "verbs": [ 
+          { 
+            "uid": "start", 
+            "info": "Enables cloud publication", 
+            "verb": "start", 
+            "usage": { 
+            }, 
+            "sample": [ 
+              { 
+              } 
+            ] 
+          }, 
+          { 
+            "uid": "stop", 
+            "info": "Disables cloud publication", 
+            "verb": "stop", 
+            "usage": { 
+            }, 
+            "sample": [ 
+              { 
+              } 
+            ] 
+          }, 
+          { 
+            "uid": "info", 
+            "info": "Generic information about the binding", 
+            "verb": "info", 
+            "usage": { 
+            }, 
+            "sample": [ 
+              { 
+              } 
+            ] 
+          } 
+        ] 
+      } 
+    ] 
+} 

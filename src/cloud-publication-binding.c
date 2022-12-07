@@ -1,22 +1,30 @@
 /*
-* Copyright (C) 2020 "IoT.bzh"
+* Copyright (C) 2020-2021 IoT.bzh Company
 * Author Vincent Rubiolo <vincent.rubiolo@iot.bzh>
-* based on original work from Fulup Ar Foll <fulup@iot.bzh>
 *
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
+* $RP_BEGIN_LICENSE$
+* Commercial License Usage
+*  Licensees holding valid commercial IoT.bzh licenses may use this file in
+*  accordance with the commercial license agreement provided with the
+*  Software or, alternatively, in accordance with the terms contained in
+*  a written agreement between you and The IoT.bzh Company. For licensing terms
+*  and conditions see https://www.iot.bzh/terms-conditions. For further
+*  information use the contact form at https://www.iot.bzh/contact.
 *
-*   http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+* GNU General Public License Usage
+*  Alternatively, this file may be used under the terms of the GNU General
+*  Public license version 3. This license is as published by the Free Software
+*  Foundation and appearing in the file LICENSE.GPLv3 included in the packaging
+*  of this file. Please review the following information to ensure the GNU
+*  General Public License requirements will be met
+*  https://www.gnu.org/licenses/gpl-3.0.html.
+* $RP_END_LICENSE$
 */
 
 #define _GNU_SOURCE
+
+#include <errno.h>
+#include <string.h>
 
 #include "cloud-publication-binding.h"
 
@@ -25,25 +33,17 @@
 #include <afb-timer.h>
 
 #define CP_TIMER_RUN_FOREVER -1
-#define CP_TIMER_MAIN_DELAY 100
 
 #define PING_VERB_RESPONSE_SIZE 33
 
-#define REDIS_CLOUD_API "redis-cloud"
-#define REDIS_CLOUD_VERB_PING "ping"
-
-#define REDIS_LOCAL_API "redis"
-#define REDIS_LOCAL_VERB_TS_MRANGE "ts_mrange"
-#define REDIS_LOCAL_VERB_TS_MAGGREGATE "ts_maggregate"
-#define REDIS_LOCAL_VERB_TS_MINSERT "ts_minsert"
-
-#define API_REPLY_SUCCESS "success"
 #define API_REPLY_FAILURE "failed"
 
 #define TIMER_RETRY_MAX_DELAY 10000
 
-#define SENSOR_CLASS "WIRED_WIND_WS310"
-#define SENSOR_CLASS_ID SENSOR_CLASS "_ID"
+#define SENSOR_CLASS_ID_MAX_LEN 51
+
+// redis binding currently crashes/abort on resampling
+#undef BINDING_HAS_RESAMPLING_SUPPORT
 
 struct publication_state
 {
@@ -60,25 +60,43 @@ struct publication_state current_state = {
     .obj = 0
 };
 
+typedef struct cloudSensor {
+  char * class;
+  char class_id[SENSOR_CLASS_ID_MAX_LEN+1];
+} cloudSensorT;
+
+typedef struct binding_parameters {
+    int publish_freq;
+    cloudSensorT * cloud_sensors;
+    const char * autostart;
+    const char * redis_local_api;
+    const char * redis_cloud_api;
+} binding_paramsT;
+
+binding_paramsT binding_params = {0};
+
 int retryDelays[] = {1000, 2000, 2000, TIMER_RETRY_MAX_DELAY};
 int retryDelaysSz = (sizeof(retryDelays)/sizeof(retryDelays[0]));
 
 static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ);
-static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
-                         json_object * argsJ, int * disconnected);
+
 static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ, void
                           (*callback)( void *closure, struct json_object
                           *object, const char *error, const char * info,
                           afb_api_t api), void *closure);
-static void publish_job(int signum, void *arg);
+static void publication_job_entry(int signum, void *arg);
 static void repush_job(int signum, void *arg);
 
-// Config Section definition (note: controls section index should match handle
-// retrieval in HalConfigExec)
-static CtlSectionT ctrlSections[] = {
-    { .key = "onload", .loadCB = OnloadConfig },
-    { .key = "redis-cloud", .loadCB = cloud_config },
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
+static int resample_sensor_values (afb_req_t request);
+static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
+                         json_object * argsJ, int * disconnected);
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
+
+// Static configuration section definition for the cloud binding
+static CtlSectionT ctrlStaticSectionsCloud[] = {
+    { .key = "cloud-pub", .loadCB = cloud_config },
     { .key = NULL }
 };
 
@@ -122,8 +140,8 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         // In any case, we restart publication.
         json_object_put(current_state.obj);
         current_state.obj = NULL;
-        job = publish_job;
-        delay = CP_TIMER_MAIN_DELAY;
+        job = publication_job_entry;
+        delay = binding_params.publish_freq;
         current_state.retry_count = 0;
     }
     else if (strcmp(error, "disconnected") == 0) {
@@ -138,8 +156,9 @@ void push_data_reply_cb(void *closure, struct json_object *mResultJ,
         AFB_API_NOTICE(current_state.api, "cloud side disconnected, retrying in %d seconds", delay / 1000);
     }
     else {
-        // the error is of an other unexpected kind
-        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to publish data!");
+        // the error is of another unexpected kind
+        AFB_API_ERROR(current_state.api, "failure to call ts_minsert() to publish data [%s]!",
+                      error ? error : "-");
         stop_publication();
         return;
     }
@@ -158,7 +177,7 @@ void push_data() {
         return;
     }
 
-    afb_api_call(current_state.api, REDIS_CLOUD_API, REDIS_LOCAL_VERB_TS_MINSERT,
+    afb_api_call(current_state.api, binding_params.redis_cloud_api, "ts_minsert",
                          json_object_get(current_state.obj), push_data_reply_cb, 0);
 }
 
@@ -199,7 +218,7 @@ static void repush_job(int signum, void *arg) {
     }
 }
 
-static void publish_job(int signum, void *arg) {
+static void publication_job_entry(int signum, void *arg) {
     int err;
     static int callCnt = 0;
     json_object * mrangeArgsJ;
@@ -209,11 +228,13 @@ static void publish_job(int signum, void *arg) {
         stop_publication();
     }
     else {
-        AFB_API_DEBUG(current_state.api, "publish_job iter %d", ++callCnt);
-        err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", SENSOR_CLASS, "fromts", "-", "tots", "+");
+        AFB_API_DEBUG(current_state.api, "publication_job_entry iter %d", ++callCnt);
+        err = wrap_json_pack (&mrangeArgsJ, "{ s:s, s:s, s:s }", "class", 
+                              binding_params.cloud_sensors[0].class, 
+                              "fromts", "-", "tots", "+");
         if (!err) {
-            call_verb_async (current_state.api, REDIS_LOCAL_API,
-                             REDIS_LOCAL_VERB_TS_MRANGE, mrangeArgsJ, ts_mrange_call_cb, NULL);
+            call_verb_async (current_state.api, binding_params.redis_local_api,
+                             "ts_mrange", mrangeArgsJ, ts_mrange_call_cb, NULL);
         } else {
             AFB_API_ERROR(current_state.api, "ts_mrange() argument packing failed!");
             stop_publication();
@@ -223,10 +244,8 @@ static void publish_job(int signum, void *arg) {
 }
 
 static void start_publication_cb (afb_req_t request) {
-    json_object * aggregArgsJ;
     afb_api_t api = afb_req_get_api(request);
     int err;
-    int disconnected = 0;
 
     assert (api);
 
@@ -239,36 +258,62 @@ static void start_publication_cb (afb_req_t request) {
     current_state.in_progress = true;
     current_state.retry_count = 0;
 
-    err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", SENSOR_CLASS_ID, "class", SENSOR_CLASS,
-                             "aggregation", "type", "avg", "bucket", 500);
-    if (err){
-        current_state.in_progress = false;
-        afb_req_fail_f(request,API_REPLY_FAILURE, "aggregation argument packing failed!");
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
+    if (resample_sensor_values (request) != 0)
         return;
-    }
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
 
-    // Request resampling being done for all future records
-    err = call_verb_sync (api, REDIS_LOCAL_API, REDIS_LOCAL_VERB_TS_MAGGREGATE, aggregArgsJ, &disconnected);
-    if (err) {
-        current_state.in_progress = false;
-        afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
-        return;
-    }
-
-    err = afb_api_queue_job(api, publish_job, 0, 0, -CP_TIMER_MAIN_DELAY);
+    err = afb_api_queue_job(api, publication_job_entry, 0, 0, -binding_params.publish_freq);
     if (err < 0) {
         current_state.in_progress = false;
-        afb_req_fail_f(request,API_REPLY_FAILURE, "redis resampling request failed!");
+        afb_req_fail_f(request,API_REPLY_FAILURE, "queuing publication job failed!");
         return;
     }
 
-    afb_req_success_f(request, NULL, "replication started successfully");
+    afb_req_success_f(request, NULL, "replication successfully started");
     return;
+}
+
+#ifdef BINDING_HAS_RESAMPLING_SUPPORT
+static int resample_sensor_values (afb_req_t request) {
+    afb_api_t api = afb_req_get_api(request);
+    int err, idx;
+    json_object * aggregArgsJ;
+    int disconnected = 0;
+
+    assert (api);
+
+    // Loop over sensors and request resampling for each of them
+    for (idx = 0; binding_params.cloud_sensors[idx].class != NULL; idx ++) {
+        err = wrap_json_pack (&aggregArgsJ, "{s:s, s:s, s: {s:s, s:i}}", "name", 
+                            binding_params.cloud_sensors[idx].class_id, "class", 
+                            binding_params.cloud_sensors[idx].class, "aggregation", 
+                            "type", "avg", "bucket", 500);
+        if (err){
+            current_state.in_progress = false;
+            afb_req_fail_f(request, API_REPLY_FAILURE, 
+                           "aggregation argument packing failed [idx:%d]!", idx);
+            return -1; 
+        }
+
+        // Request resampling being done for all future records
+        err = call_verb_sync (api, binding_params.redis_local_api, "ts_maggregate", 
+                              aggregArgsJ, &disconnected);
+        if (err) {
+            current_state.in_progress = false;
+            afb_req_fail_f(request,API_REPLY_FAILURE, 
+                           "redis resampling request failed [idx:%d]!", idx);
+            return -1;
+        }
+    }
+
+    return 0;
 }
 
 static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * verbToCall,
                       json_object * argsJ, int * disconnected) {
     int err;
+    int status = 0;
     char *returnedError = NULL, *returnedInfo = NULL;
     json_object *responseJ = NULL;
 
@@ -283,25 +328,30 @@ static int call_verb_sync (afb_api_t api, const char * apiToCall, const char * v
                   returnedError ? returnedError : "none",
                   returnedInfo ? returnedInfo : "none",
                   verbToCall, apiToCall);
-        free(returnedError);
-        free(returnedInfo);
-        return -1;
+        status = -1;
+        goto exit;
     } 
 
     // no protocol error but a higher level one
     if (returnedError) { 
-        AFB_API_DEBUG(api, "%s: %s/%s sync call returned OK but error detected: %s", __func__, apiToCall,
-                    verbToCall, returnedError);
+        AFB_API_DEBUG(api, "%s: %s/%s sync call returned OK but higher level error detected: %s", 
+                      __func__, apiToCall, verbToCall, returnedError);
         if (strcmp (returnedError, "disconnected") == 0) {
             *disconnected = 1;
+        } else {
+            // treat errors other than disconnections as real errors
+            status = -1;
         }
-        free (returnedError);
     }
-    AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s", __func__, apiToCall, verbToCall,
-                  json_object_to_json_string(responseJ));
+    AFB_API_DEBUG(api, "%s: %s/%s sync call performed. Remote side replied: %s [%s]", __func__, apiToCall, verbToCall,
+                  json_object_to_json_string(responseJ), returnedInfo ? returnedInfo : "-");
 
-    return 0;
+exit:
+    free(returnedInfo);
+    free(returnedError);
+    return status;
 }
+#endif /* BINDING_HAS_RESAMPLING_SUPPORT */
 
 static void call_verb_async (afb_api_t api, const char * apiToCall, const char * verbToCall,
                           json_object * argsJ,
@@ -337,7 +387,7 @@ static void info_cb (afb_req_t request) {
     json_object * infoArgsJ;
 	enum json_tokener_error jerr;
 
-	infoArgsJ = json_tokener_parse_verbose(infoVerb, &jerr);
+	infoArgsJ = json_tokener_parse_verbose(info_verbS, &jerr);
 	if (infoArgsJ == NULL || jerr != json_tokener_success) {
         afb_req_fail_f(request,API_REPLY_FAILURE, "failure while packing info() verb arguments (error: %d)!", jerr);
         return;
@@ -355,21 +405,86 @@ static afb_verb_t CtrlApiVerbs[] = {
     { .verb = NULL} /* marker for end of the array */
 };
 
-static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *rtusJ) {
+static int cloud_config(afb_api_t api, CtlSectionT *section, json_object *cloudSectionJ) {
 
-    static int callCnt = 0;
+    size_t count;
+    int err;
+    int ix;
+    static bool config_call = true;
+    json_object * sensorsJ;
 
-    if (callCnt == 0) {
-        AFB_API_NOTICE (api, "%s: init time", __func__);
-    } else if (callCnt == 1) {
-        AFB_API_NOTICE (api, "%s: exec time", __func__);
+    // first call is config call, we want to check if the config has a problem
+    // second call is exec call, the section pointer will be NULL
+    if (config_call) {
+        if (cloudSectionJ == NULL) {
+            AFB_API_ERROR(api, "cloud binding configuration section is NULL!");
+            goto error_exit;
+        }
+        config_call = false;
+    } else {
+        return 0; // is done, nothing to do
     }
-    callCnt++;
-    return 0;
 
+    AFB_API_DEBUG (api, "%s: parsing cloud publication binding configuration", __func__);
+
+    err = wrap_json_unpack(cloudSectionJ, "{s:i, s:s, s:o}", "publish_frequency_ms", 
+                           &binding_params.publish_freq, "autostart", 
+                           &binding_params.autostart, "sensors", &sensorsJ);
+    if (err) {
+        AFB_API_ERROR(api, "Cannot parse JSON config at '%s'. Error is: %s", 
+                      json_object_to_json_string(cloudSectionJ), wrap_json_get_error_string(err));
+        goto error_exit;
+    }
+
+    if (!json_object_is_type(sensorsJ, json_type_array)) {
+        AFB_API_ERROR(api, "Sensor configuration must be an array! Found %s instead.", 
+                      json_object_to_json_string(sensorsJ));
+        goto error_exit;
+    }
+
+    count = json_object_array_length(sensorsJ);
+    if (count == 0 ) {
+        AFB_API_ERROR(api, "Sensor configuration array in configuration is empty: %s!",
+                      json_object_to_json_string(sensorsJ));
+        goto error_exit;
+    } else {
+        binding_params.cloud_sensors = calloc (count + 1, sizeof (cloudSensorT));
+        if (binding_params.cloud_sensors == NULL) {
+            AFB_API_ERROR(api, "Cannot allocate array for sensor configuration: %s", strerror (errno));
+            goto error_exit;
+            }
+    }
+
+    for (ix = 0 ; ix < count; ix++) {
+        json_object * obj = json_object_array_get_idx(sensorsJ, ix);
+
+        err = wrap_json_unpack(obj, "{s:s !}", "class", &binding_params.cloud_sensors[ix].class);
+        if (err) {
+            AFB_API_ERROR(api, "Cannot parse sensor config at '%s'. Error is: %s", 
+                        json_object_to_json_string(obj), wrap_json_get_error_string(err));
+            goto error_exit;
+        }
+        // substract 3 bytes for ID suffix
+        snprintf(binding_params.cloud_sensors[ix].class_id, SENSOR_CLASS_ID_MAX_LEN-3, "ID-%s", 
+                 binding_params.cloud_sensors[ix].class); 
+    }
+
+    // Visual inspection of parameters 
+    AFB_API_DEBUG(api, "Publishing data every %d ms", binding_params.publish_freq);
+    AFB_API_DEBUG(api, "Binding autostart is: %s", 
+                  strcmp(binding_params.autostart, "yes") ? "disabled": "enabled");
+    for (ix = 0; binding_params.cloud_sensors[ix].class; ix++) {
+        AFB_API_DEBUG(api, "Publishing data for sensor %d: %s - %s", ix, 
+                      binding_params.cloud_sensors[ix].class, 
+                      binding_params.cloud_sensors[ix].class_id);
+    }
+
+    return 0;
+error_exit:
+    return -1;
 }
 
-static int CtrlInitOneApi(afb_api_t api) {
+static int CtrlInitOneApiCloud(afb_api_t api) {
     int err = 0;
 
     // retrieve section config from api handle
@@ -386,20 +501,80 @@ static int CtrlInitOneApi(afb_api_t api) {
     return err;
 }
 
-static int CtrlLoadOneApi(void* vcbdata, afb_api_t api) {
+static int CtrlLoadOneApiCloud(void* vcbdata, afb_api_t api) {
     CtlConfigT* ctrlConfig = (CtlConfigT*)vcbdata;
 
     // save closure as api's data context
     // note: this is mandatory for the controller to work
     afb_api_set_userdata(api, ctrlConfig);
 
-    // load section for corresponding API
-    int error = CtlLoadSections(api, ctrlConfig, ctrlSections);
+    // load section for corresponding API. This makes use of the ctrlSectionsCloud array defined above.
+    int error = CtlLoadSections(api, ctrlConfig, ctrlStaticSectionsCloud);
 
     // init and seal API function
-    afb_api_on_init(api, CtrlInitOneApi);
+    afb_api_on_init(api, CtrlInitOneApiCloud);
 
     return error;    
+}
+
+/**
+ * @brief Process the 'required' API section of the binding
+ *
+ * @param api - the binding API
+ * @param requireJ - a pointer on JSON 'require' section object
+ * @return 0 on success
+ * @return -1 if there was any error in the parameter structure or a parsing error
+ */
+
+static int process_required_apis (afb_api_t api, json_object * requireJ) {
+    // Check required APIs
+    // By convention, the first entry is the cloud side, the second one is the local side
+
+    json_object * redis_cloud_api;
+    json_object * redis_local_api;
+
+    if (requireJ == NULL) {
+        AFB_API_ERROR(api, "could not find a 'require' entry in binding 'metadata' section!");
+        goto _error;
+    }
+
+    if (!json_object_is_type(requireJ, json_type_array)) {
+        AFB_API_ERROR(api, "Binding required APIs section must be an array! Found %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    if (json_object_array_length(requireJ) != 2) {
+        AFB_API_ERROR(api, "Binding required APIs section must have 2 entries! Found %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    redis_cloud_api = json_object_array_get_idx(requireJ,0);
+    redis_local_api = json_object_array_get_idx(requireJ,1);
+
+    if (redis_cloud_api == NULL || redis_local_api == NULL) {
+        AFB_API_ERROR(api, "Cannot retrieve binding required APIs from %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    binding_params.redis_local_api = json_object_get_string(redis_local_api);
+    binding_params.redis_cloud_api = json_object_get_string(redis_cloud_api);
+
+    if (binding_params.redis_cloud_api == NULL || \
+        binding_params.redis_local_api == NULL) {
+        AFB_API_ERROR(api, "Cannot process binding required APIs info from %s", 
+                      json_object_to_json_string(requireJ));
+        goto _error;
+    }
+
+    AFB_API_DEBUG(api, "Redis cloud API name is '%s'", binding_params.redis_cloud_api);
+    AFB_API_DEBUG(api, "Redis local API name is '%s'", binding_params.redis_local_api);
+    return 0;
+
+_error:
+    return -1;
 }
 
 int afbBindingEntry(afb_api_t api) {
@@ -432,7 +607,12 @@ int afbBindingEntry(afb_api_t api) {
 
     AFB_API_NOTICE(api, "Controller API='%s' info='%s'", ctrlConfig->api, ctrlConfig->info);
 
-    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApi, ctrlConfig);
+    if (process_required_apis(api, ctrlConfig->requireJ) != 0) {
+        status = ERROR;
+        goto _exit_afbBindingEntry;
+    }
+
+    handle = afb_api_new_api(api, ctrlConfig->api, ctrlConfig->info, 0, CtrlLoadOneApiCloud, ctrlConfig);
     if (!handle){
         AFB_API_ERROR(api, "afbBindingEntry failed to create API");
         status = ERROR;
