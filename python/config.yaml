@@ -1,0 +1,114 @@
+###########################################################################
+# Copyright (C) 2022 IoT.bzh Company
+# Author Vincent Rubiolo <vincent.rubiolo@iot.bzh>
+#
+# $RP_BEGIN_LICENSE$
+# Commercial License Usage
+#  Licensees holding valid commercial IoT.bzh licenses may use this file in
+#  accordance with the commercial license agreement provided with the
+#  Software or, alternatively, in accordance with the terms contained in
+#  a written agreement between you and The IoT.bzh Company. For licensing terms
+#  and conditions see https://www.iot.bzh/terms-conditions. For further
+#  information use the contact form at https://www.iot.bzh/contact.
+#
+# GNU General Public License Usage
+#  Alternatively, this file may be used under the terms of the GNU General
+#  Public license version 3. This license is as published by the Free Software
+#  Foundation and appearing in the file LICENSE.GPLv3 included in the packaging
+#  of this file. Please review the following information to ensure the GNU
+#  General Public License requirements will be met
+#  https://www.gnu.org/licenses/gpl-3.0.html.
+# $RP_END_LICENSE$
+#
+###########################################################################
+
+verbosity: 1
+
+databases:
+  redis-local:
+    host: localhost
+    port: 6379
+
+  redis-cloud:
+    host: localhost
+    port: 26379
+
+sync:
+  # When sync autostart is disabled, only database parsing occurs. Use this for
+  # statistics and debugging purposes.
+  # This is also used by the binding: in this case, one has to manually request
+  # synchronization be started, via the binding API verbs
+  autostart: true
+  #
+  # Database polling frequency
+  # This is the number of seconds the synchronizing engine waits before checking
+  # whether there is are new records in the database to synchronize. Only one
+  # synchronization operation can occur at a given time, the engine will thus
+  # pend until the current one is done.
+  db_poll_freq: 3
+  # 
+  # First index of interval to work on. Use this in conjunction with
+  # time_interval_nb to restrict the amount of intervals for debugging purposes.
+  # Production settings use 0, meaning to start at the first interval.
+  time_interval_start_idx: 0
+  #
+  # Number of time intervals to work on. Use this to restrict the amount for
+  # debugging purposes. Production settings use -1, meaning to sync all
+  # intervals.
+  time_interval_nb: -1
+  #
+  # Time interval width in milliseconds. The full TimeSeries database time span
+  # will be split into intervals this wide. Each interval is then synchronized
+  # one after the other over all database keys
+  time_interval_size: 1800000
+  #
+  # The pattern/label to select the TimeSeries keys to sync
+  key_label_ts: 'SIEMENS_ET200SP'
+  #
+  # The pattern/label to select the normal Redis keys to sync
+  key_label: 'SIEMENS_ET200SP_UNIT'
+  #
+  # Compaction support. 
+  compaction:
+    # If compaction is enabled, every replicated Redis TS key will have a
+    # counterpart created on the remote/target side with an associated
+    # compaction rule. Since those keys are created before data is synchronized,
+    # the rule will make it so that data is resampled as synchronization occurs
+    # on the main keys. This can be used to trim down samples: just query the
+    # compacted keys.
+    # See https://redis.io/commands/ts.createrule for parameters.
+    enabled: true
+    #
+    # The suffix used to build the name of the compacted values key from the
+    # Redis TS original keys. It is appended to the key_label value.
+    key_suffix: '_COMPACTED'
+    #
+    # Simple arithmetic average. This maps to what Redis TimeSeries supports.
+    aggregator: avg
+    #
+    # Sample every 30 min
+    bucket_duration: 1800000
+  keys:
+    # The set of keys to sync and their associated priority:
+    # - the high priority keys will be synced at all bandwidth levels
+    # - the medium priority keys only when the bandwidth setting is 'medium' or 'high' 
+    # - the low priority keys only when the quality is high
+    # The high/medium/low bandwidth quality settings refer to the associated
+    # binding bandwidth controls.
+    # Keys which are found in the database and which are not associated with any
+    # level are deemed medium priority.
+    high_priority:
+      - 'SIEMENS_ET200SP.flowmeter.fuel_temperature_mp1_in'
+      - 'SIEMENS_ET200SP.flowmeter.fuel_temperature_mp1_out'
+      - 'SIEMENS_ET200SP.flowmeter.fuel_temperature_mp2_in'
+      - 'SIEMENS_ET200SP.flowmeter.fuel_temperature_mp2_out'
+      - 'SIEMENS_ET200SP.alarm_center_1.access_panel_bar_room_open'
+      - 'SIEMENS_ET200SP.alarm_center_1.alarm_not_ack'
+      - 'SIEMENS_ET200SP.alarm_center_1.apg_default_general'
+    low_priority:
+      - 'SIEMENS_ET200SP.hour_meter.dewatering_pump_n1_operating_time'
+      - 'SIEMENS_ET200SP.hour_meter.dewatering_pump_n2_operating_time'
+      - 'SIEMENS_ET200SP.hour_meter.diesel_transfer_pump_operating_time'
+      - 'SIEMENS_ET200SP.hour_meter.fuel_centrifuge_operating_time'
+      - 'SIEMENS_ET200SP.hour_meter.high_speed_port_fan_machine_operating_time'
+
